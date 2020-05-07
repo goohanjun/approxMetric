@@ -139,7 +139,7 @@ if __name__ == "__main__":
 
     n_pairs, results = 0, {}
     total_start = time.time()
-    for i, sentence_1 in tqdm(enumerate(sentences)):
+    for i, sentence_1 in tqdm(enumerate(sentences), total=len(sentences)):
         for j, sentence_2 in enumerate(sentences):
             if j > i:
                 n_pairs += 1
