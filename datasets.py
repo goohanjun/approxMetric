@@ -122,10 +122,11 @@ def torchtext_imdb(size=200, mode='train'):
         train, test = datasets.IMDB.splits(TEXT, LABEL)
 
         # build the vocabulary
-        # TEXT.build_vocab(train, vectors=torchtext.vocab.GloVe(name='6B', dim=300))
-        TEXT.build_vocab(train)
+        TEXT.build_vocab(train, vectors=torchtext.vocab.GloVe(name='6B', dim=300))
         LABEL.build_vocab(train)
         itos = TEXT.vocab.itos
+
+        pretrained_embeddings = TEXT.vocab.vectors
 
         # make iterator for splits
         train_loader, test_loader = data.BucketIterator.splits((train, test), batch_size=1)
@@ -156,6 +157,7 @@ def compute_wmd_for_all_pairs(model, sentences):
         for j, sentence_2 in enumerate(sentences):
             if i > j: continue
             cnt_pairs += 1
+            # TODO: need to replace pyemd
             dist = model.wmdistance(sentence_1, sentence_2)
             dists[i, j] = dist
             dists[j, i] = dist
