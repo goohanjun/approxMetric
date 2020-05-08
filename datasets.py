@@ -161,7 +161,8 @@ class DataFactory:
         sentences, recon_sentences = self.sentences
 
         result_keys = list(results.keys())
-        random.shuffle(result_keys)
+        if mode == 'train':
+            random.shuffle(result_keys)
 
         keys, batch = [], []
         for k in result_keys:
