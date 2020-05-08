@@ -1,40 +1,54 @@
 import torch
 import torch.nn as nn
 
+from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
+
 
 class ApproxEMD(nn.Module):
-    def __init__(self, n_in, n_hidden):
+
+    def __init__(self, n_hidden):
+        super().__init__()
         self.n_hidden = n_hidden
-        self.emb_layer = MLP(input_hidden=n_in, n_hiddens=[n_hidden, n_hidden])
+        self.gru = nn.RNN(input_size=300, hidden_size=n_hidden, num_layers=1, bidirectional=False, batch_first=True)
+
         self.out_layer = MLP(input_hidden=n_hidden * 3, n_hiddens=[n_hidden, n_hidden])
         self.final_layer = nn.Linear(n_hidden, 1)
         self.final_act = nn.ReLU()
         return
 
-    def forward(self, x, y):
-        h_1 = self.emb_layer(x)  # [batch, n_h]
-        h_2 = self.emb_layer(y)  # [batch, n_h]
-        h = torch.stack([h_1, h_2, h_1 * h_2], dim=-1)  # [batch, 3*n_h]
-        out = self.out_layer(h)  # [batch, 1]
+    def forward(self, sentences_1, lengths_1, sentences_2, lengths_2):
+        bs = lengths_1.size()[0]
+        # print("bs", bs)
+        # print("sentences_1", sentences_1.shape)
+        # print("lengths_1", lengths_1.shape)
+        packed_input_1 = pack_padded_sequence(sentences_1, lengths_1.tolist(), batch_first=True, enforce_sorted=False)
+        _, hidden_1 = self.gru(packed_input_1)
+        # print("hidden_1.shape", hidden_1.shape)
+        hidden_1 = hidden_1.view(bs, -1)
 
-        approx_dist = self.final_act(self.final_layer(out))
-        return approx_dist.reshape(-1)  # [batch]
+        packed_input_2 = pack_padded_sequence(sentences_2, lengths_2.tolist(), batch_first=True, enforce_sorted=False)
+        _, hidden_2 = self.gru(packed_input_2)
+        # print("hidden_2.shape", hidden_2.shape)
+        hidden_2 = hidden_2.view(bs, -1)
+
+        h = torch.cat([hidden_1, hidden_2, hidden_1 * hidden_2], dim=-1)  # [bs, 3 * n_h]
+        h_final = self.out_layer(h)  # [batch, 1]
+
+        approx_dist = self.final_act(self.final_layer(h_final))
+
+        return approx_dist.view(-1)  # [batch]
 
 
 class MLP(nn.Module):
-    def __init__(self, input_hidden, n_hiddens=[64, 64], fix_output_dim=True):
+    def __init__(self, input_hidden, n_hiddens=[64, 64]):
         super().__init__()
-        tmp_hiddens = n_hiddens.copy()
-        if fix_output_dim:
-            tmp_hiddens.append(input_hidden // 2)
-
-        self.n_hiddens = tmp_hiddens
+        self.n_hiddens = n_hiddens.copy()
         self.layers = nn.ModuleList()
         self.act_layers = nn.ModuleList()
         h_in = input_hidden
-        for i, h_out in enumerate(tmp_hiddens):
+        for i, h_out in enumerate(self.n_hiddens):
             self.layers.append(nn.Linear(h_in, h_out))
-            if i < len(tmp_hiddens) - 1:
+            if i < len(self.n_hiddens) - 1:
                 self.act_layers.append(nn.ReLU())
             h_in = h_out
         return
@@ -42,6 +56,7 @@ class MLP(nn.Module):
     def forward(self, x):
         h = x
         for i in range(len(self.layers)):
+            # print("MLP, i", i, " h", h.size())
             h = self.layers[i](h)
             if i < len(self.layers) - 1:
                 h = self.act_layers[i](h)

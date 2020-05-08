@@ -30,7 +30,10 @@ def prepare_emd(sentence_1, sentence_2, embedding):
 
     dists = np.zeros((len(total_word_list), len(total_word_list)))
 
-    word_tensor = torch.LongTensor(total_word_list).cuda()
+    word_tensor = torch.LongTensor(total_word_list)
+    if torch.cuda.is_available():
+        word_tensor.cuda()
+
     word_emb_tensor = embedding(word_tensor)
     dists = torch.sqrt(torch.sum((word_emb_tensor.unsqueeze(0) - word_emb_tensor.unsqueeze(1)) ** 2., dim=-1) + 1e-10)
     dists = dists.detach().cpu().numpy().astype(np.float64)
@@ -62,9 +65,15 @@ def relaxed_emd(sentence_1, sentence_2, embedding):
     for w in sentence_2: hist_2[idx_map_2[w]] += 1.
     hist_1 /= np.sum(hist_1)
     hist_2 /= np.sum(hist_2)
+    hist_1 = torch.FloatTensor(hist_1)
+    hist_2 = torch.FloatTensor(hist_2)
 
-    word_1_tensor = torch.LongTensor(total_word_list_1).cuda()
-    word_2_tensor = torch.LongTensor(total_word_list_2).cuda()
+    word_1_tensor = torch.LongTensor(total_word_list_1)
+    word_2_tensor = torch.LongTensor(total_word_list_2)
+    if torch.cuda.is_available():
+        word_1_tensor.cuda(); word_2_tensor.cuda();
+        hist_1.cuda(); hist_2.cuda();
+
     word_emb_tensor_1 = embedding(word_1_tensor)  # [n, 300]
     word_emb_tensor_2 = embedding(word_2_tensor)  # [m, 300]
 
@@ -72,8 +81,8 @@ def relaxed_emd(sentence_1, sentence_2, embedding):
     dists = torch.sqrt(
         torch.sum((word_emb_tensor_1.unsqueeze(1) - word_emb_tensor_2.unsqueeze(0)) ** 2., dim=-1) + 1e-10)
 
-    dist_1 = torch.sum(torch.FloatTensor(hist_1).cuda() * torch.min(dists, dim=1)[0]).detach().cpu().item()
-    dist_2 = torch.sum(torch.FloatTensor(hist_2).cuda() * torch.min(dists, dim=0)[0]).detach().cpu().item()
+    dist_1 = torch.sum(hist_1 * torch.min(dists, dim=1)[0]).detach().cpu().item()
+    dist_2 = torch.sum(hist_2 * torch.min(dists, dim=0)[0]).detach().cpu().item()
     return max(dist_1, dist_2)
 
 
@@ -118,7 +127,10 @@ if __name__ == "__main__":
     # assign pretrained embedding
     n_voca, n_dim = pretrained_embeddings.shape
     embedding = nn.Embedding(n_voca, n_dim)
-    embedding.weight.data = pretrained_embeddings.cuda()
+    if torch.cuda.is_available():
+        embedding.weight.data = pretrained_embeddings.cuda()
+    else:
+        embedding.weight.data = pretrained_embeddings
 
     size = args.data_size
     train_loader, test_loader = data.BucketIterator.splits((train, test), batch_size=1)
@@ -126,8 +138,8 @@ if __name__ == "__main__":
     for i, train_batch in enumerate(train_loader):
         if i == size: break
         sentence, length, label = train_batch.text[0], train_batch.text[1], train_batch.label
-        length = length.reshape(-1).cpu().numpy()[0]
-        sentence = sentence.reshape(-1).cpu().numpy()
+        length = length.view(-1).cpu().numpy()[0]
+        sentence = sentence.view(-1).cpu().numpy()
         if i == 0: print(length, sentence)
         sentence = [w_idx for w_idx in sentence if w_idx not in stop_words_idx]
 
