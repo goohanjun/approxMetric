@@ -68,7 +68,7 @@ def main(args):
 
     print(model)
 
-    optimizer = torch.optim.Adam(model.parameters(), args.lr)
+    optimizer = torch.optim.Adam(model.parameters(), args.lr, weight_decay=args.l2_reg)
     sw_train = SummaryWriter(f'./logs/{args.model_name}_train')
     sw_test = SummaryWriter(f'./logs/{args.model_name}_test')
 
@@ -86,6 +86,7 @@ if __name__ == '__main__':
     # Model
     parser.add_argument('--model_name', type=str, default="EMD", help="model name")
     parser.add_argument('--lr', type=float, default=1e-4, help="learning rate")
+    parser.add_argument('--l2_reg', type=float, default=1e-5, help="learning rate")
 
     # Debug
     parser.add_argument('--test', type=str2bool, nargs='?',
