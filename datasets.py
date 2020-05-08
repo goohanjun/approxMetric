@@ -160,8 +160,12 @@ class DataFactory:
 
         sentences, recon_sentences = self.sentences
 
+        result_keys = list(results.keys())
+        random.shuffle(result_keys)
+
         keys, batch = [], []
-        for k, v in results.items():
+        for k in result_keys:
+            v = results[k]
             i, j = k
             keys.append(k)
             batch.append((sentences[i], sentences[j], v))
