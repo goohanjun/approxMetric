@@ -13,7 +13,6 @@ def train_single_epoch(args, model, optimizer, data_factory, summary_writer, mod
     cum_loss = 0.
     loss_func = torch.nn.MSELoss()
 
-    data_factory.init_performance()
     for b in data_factory.get_batch(batch_size=args.batch_size, mode=mode):
         keys, sentences_1, sentences_2, dists = b
 
@@ -35,19 +34,17 @@ def train_single_epoch(args, model, optimizer, data_factory, summary_writer, mod
 
 
 def train(args, model, optimizer, data_factory, summary_writer):
-    modes = ['train', 'valid', 'test_1', 'test_2']
 
     for epoch in tqdm(range(100)):
+        data_factory.init_performance()
 
-        for mode in modes:
+        for mode in ['train', 'valid', 'test_1', 'test_2']:
             loss = train_single_epoch(args, model, optimizer, data_factory, summary_writer, mode)
-            perf_dict = data_factory.eval_performance(mode)
+            summary_writer.add_scalar(f'loss/{mode}', loss, epoch)
 
-            if mode == 'train': print(perf_dict)
-
-            summary_writer.add_scalar(f'{mode}/loss', loss, epoch)
-            for k, v in perf_dict.items():
-                summary_writer.add_scalar(f'{mode}/{k}', v, epoch)
+        perf_dict = data_factory.eval_performance()
+        for k, v in perf_dict.items():
+            summary_writer.add_scalar(f'performance/{k}', v, epoch)
 
 
 def main(args):
@@ -76,7 +73,7 @@ if __name__ == '__main__':
     # Dataset
     parser.add_argument('--data_size', type=int, default=30, help="Data sentence size")
     parser.add_argument('--n_hidden', type=int, default=64, help="hidden dimension size")
-    parser.add_argument('--batch_size', type=int, default=32, help="batch size")
+    parser.add_argument('--batch_size', type=int, default=128, help="batch size")
 
     # Model
     parser.add_argument('--lr', type=float, default=1e-4, help="learning rate")

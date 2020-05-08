@@ -7,60 +7,106 @@ import torchtext.datasets as datasets
 import random
 import pickle
 from torch.nn.utils.rnn import pack_padded_sequence
+import numpy as np
 
 
 class DataFactory:
     def __init__(self, size=500):
         self.size = size
-        self.sentences, self.train, self.valid, self.test_1, self.test_2 = self.load()
+        self.train, self.valid, self.test_1, self.test_2 = self.load()
 
         self.embedding = self.load_embedding()
 
         self.init_performance()
 
     def init_performance(self):
-        self.collected_true_dists = {'train': {}, 'valid': {}, 'test_1': {}, 'test_2': {}}
-        self.collected_approx_dists = {'train': {}, 'valid': {}, 'test_1': {}, 'test_2': {}}
+        self.collected_approx_dists = {}
 
     def collect(self, mode, keys, true_dist, approx_dist):
         true_dist = true_dist.cpu().numpy()
         approx_dist = approx_dist.detach().cpu().numpy()
 
-        true_dist_dict = self.collected_true_dists[mode]
-        approx_dist_dict = self.collected_approx_dists[mode]
-
         for i, k in enumerate(keys):
-            true_dist_dict[k] = true_dist[i]
-            approx_dist_dict[k] = approx_dist[i]
+            self.collected_approx_dists[k] = approx_dist[i]
         return
 
-    def eval_performance(self, mode):
-        true_dist_dict = self.collected_true_dists[mode]
-        approx_dist_dict = self.collected_approx_dists[mode]
+    def eval_performance(self):
+        perf_dict = {}
 
-        n_pairs, n_hits = 0, 0
+        train_size = int(self.size * 0.8)
+        wmd_dist_matrix = np.zeros(shape=(self.size, self.size))
+        rwmd_dist_matrix = np.zeros(shape=(self.size, self.size))
+        approx_dist_matrix = np.zeros(shape=(self.size, self.size))
 
-        # MSE
-        mse = 0.
-        for k, v in true_dist_dict.items():
-            n_pairs += 1
-            mse += (v - approx_dist_dict[k])**2.
+        for (i, j), v  in self.results.items():
+            wmd_dist_matrix[(i, j)] = v['dist_wmd']
+            wmd_dist_matrix[(j, i)] = v['dist_wmd']
+            rwmd_dist_matrix[(i, j)] = v['dist_rwmd']
+            rwmd_dist_matrix[(j, i)] = v['dist_rwmd']
 
-        # for i in range(n_sentence):
-        #     for j in range(i + 1, n_sentence):
-        #         for k in range(j + 1, n_sentence):
-        #             if i == j or j == k: continue
-        #             dist_1, dist_2 = true_dists[(i, j)], true_dists[(j, k)]
-        #             approx_dist_1, approx_dist_2 = approx_dists[(i, j)], approx_dists[(j, k)]
-        #
-        #             n_pairs += 1
-        #             if dist_1 > dist_2 and approx_dist_1 > approx_dist_2:
-        #                 n_hits += 1
-        #             elif dist_1 < dist_2 and approx_dist_1 < approx_dist_2:
-        #                 n_hits += 1
+        for (i, j), v in self.collected_approx_dists.items():
+            approx_dist_matrix[(i, j)] = v
+            approx_dist_matrix[(j, i)] = v
 
-        n_pairs = max(n_pairs, 1)
-        perf_dict = {"mse": mse / n_pairs, "n_hits": n_hits, "n_pairs": n_pairs, "comparison_accuracy": n_hits / n_pairs}
+        n_pairs = len(wmd_dist_matrix[:, train_size:] .nonzero()[0])
+        perf_dict['test_mse_rwmd'] = np.sum((wmd_dist_matrix[:, train_size:] - rwmd_dist_matrix[:, train_size:]) ** 2.) / n_pairs
+        perf_dict['test_mse_approx'] = np.sum((wmd_dist_matrix[:, train_size:] - approx_dist_matrix[:, train_size:]) ** 2.) / n_pairs
+        perf_dict['test_n_pairs'] = n_pairs // 2  # symmetry matrix
+
+        n_pairs = len(wmd_dist_matrix[:, :train_size] .nonzero()[0])
+        perf_dict['train_mse_rwmd'] = np.sum((wmd_dist_matrix[:, :train_size] - rwmd_dist_matrix[:, :train_size]) ** 2.) / n_pairs
+        perf_dict['train_mse_approx'] = np.sum((wmd_dist_matrix[:, :train_size] - approx_dist_matrix[:, :train_size]) ** 2.) / n_pairs
+        perf_dict['train_n_pairs'] = n_pairs // 2
+
+        def dcg_at_k(r, k, method=0):
+            r = np.asfarray(r)[:k]
+            if r.size:
+                if method == 0:
+                    return r[0] + np.sum(r[1:] / np.log2(np.arange(2, r.size + 1)))
+                elif method == 1:
+                    return np.sum(r / np.log2(np.arange(2, r.size + 2)))
+                else:
+                    raise ValueError('method must be 0 or 1.')
+            return 0.
+
+        def ndcg_at_k(r, k=20, method=1):
+            dcg_max = dcg_at_k(sorted(r, reverse=True), k, method)
+            if not dcg_max:
+                return 0.
+            return dcg_at_k(r, k, method) / dcg_max
+
+        def get_ndcg(true_dists, target_scores, top_k):
+            merged_list = list(zip(true_dists, target_scores))
+
+            rel_list = sorted(merged_list, key=lambda x: x[0])  # lower true distance come first
+            _, rel_list = zip(*rel_list)
+            ndcg = ndcg_at_k(rel_list, top_k)
+            return ndcg
+
+        # Compute ndcg
+        wmd_scores = 10000. - wmd_dist_matrix
+        rwmd_scores = 10000. - rwmd_dist_matrix
+        approx_scores = 10000. - approx_dist_matrix
+
+        for top_k in [10, 20, 50]:
+
+            wmd_ndcg, rwmd_ndcg, approx_ndcg = [], [], []
+
+            for q_idx in (train_size, self.size):
+                q_true_dists = list(wmd_dist_matrix[q_idx, :])
+
+                q_wmd_scores = list(wmd_scores[q_idx, :])
+                q_rwmd_scores = list(rwmd_scores[q_idx, :])
+                q_approx_scores = list(approx_scores[q_idx, :])
+
+                wmd_ndcg.append(get_ndcg(q_true_dists, q_wmd_scores, top_k))
+                rwmd_ndcg.append(get_ndcg(q_true_dists, q_rwmd_scores, top_k))
+                approx_ndcg.append(get_ndcg(q_true_dists, q_approx_scores, top_k))
+
+            perf_dict[f'wmd_ndcg_{top_k}'] = np.mean(rwmd_ndcg)
+            perf_dict[f'rwmd_ndcg_{top_k}'] = np.mean(rwmd_ndcg)
+            perf_dict[f'approx_ndcg_{top_k}'] = np.mean(approx_ndcg)
+
         return perf_dict
 
     def load_embedding(self):
@@ -87,6 +133,10 @@ class DataFactory:
                 results = pickle.load(f)
             with open(f'./wmd_sentences_{self.size}.pkl', 'rb') as f:
                 sentences = pickle.load(f)
+            print(f"wmd_results_{self.size}.pkl Loaded!")
+
+            self.results = results
+            self.sentences = sentences
 
         except Exception:
             print(f"wmd_results_{self.size}.pkl does not exist!")
@@ -110,17 +160,11 @@ class DataFactory:
                 elif i in test_set and j in test_set:
                     test_2_result[(i, j)] = results[(i, j)]
 
-        return sentences, train_result, valid_result, test_1_result, test_2_result
+        return train_result, valid_result, test_1_result, test_2_result
 
     def get_batch(self, batch_size=10, mode='train'):  # train, test_1, test_2
-        if mode == 'train':
-            results = self.train
-        if mode == 'valid':
-            results = self.valid
-        elif mode == 'test_1':
-            results = self.test_1
-        elif mode == 'test_2':
-            results = self.test_2
+        results_dict = {'train': self.train, 'valid': self.valid, 'test_1': self.test_1, 'test_2': self.test_2}
+        results = results_dict[mode]
 
         sentences, recon_sentences = self.sentences
 
@@ -175,11 +219,6 @@ class DataFactory:
 
 
 if __name__ == "__main__":
-
-    # model = api.load('glove-twitter-25')
-    # for data_name in ["ag_news", "imdb"]:
-    #     sentences = get_sentences(data_name, size=10)
-    #     compute_wmd_for_all_pairs(model, sentences)
 
     data_factory = DataFactory(size=30)
     gru = nn.RNN(input_size=300, hidden_size=15, num_layers=1, bidirectional=False, batch_first=True)
