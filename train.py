@@ -83,7 +83,7 @@ if __name__ == '__main__':
                         const=True, default=False, help="True if you wanna print messages")
 
     args = Map(vars(parser.parse_args()))
-    args.model_name = "testEMD"
+    args.model_name = f"testEMD_{args.data_size}"
     print(args)
 
     main(args)

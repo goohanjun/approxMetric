@@ -92,7 +92,7 @@ class DataFactory:
 
             wmd_ndcg, rwmd_ndcg, approx_ndcg = [], [], []
 
-            for q_idx in (train_size, self.size):
+            for q_idx in range(train_size, self.size):
                 q_true_dists = list(wmd_dist_matrix[q_idx, :])
 
                 q_wmd_scores = list(wmd_scores[q_idx, :])
