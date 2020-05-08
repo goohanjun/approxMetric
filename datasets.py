@@ -6,7 +6,7 @@ import torchtext.datasets as datasets
 
 import random
 import pickle
-import numpy as np
+from torch.nn.utils.rnn import pack_padded_sequence
 
 
 class DataFactory:
@@ -181,22 +181,15 @@ if __name__ == "__main__":
     #     sentences = get_sentences(data_name, size=10)
     #     compute_wmd_for_all_pairs(model, sentences)
 
-    from torch.nn.utils.rnn import pack_padded_sequence
-
     data_factory = DataFactory(size=30)
     gru = nn.RNN(input_size=300, hidden_size=15, num_layers=1, bidirectional=False, batch_first=True)
 
     for b in data_factory.get_batch(batch_size=2, mode='train'):
-        keys, sentences_1, sentences_2, lengths_1, lengths_2, dists = b
+        keys, sentences_1, sentences_2, dists = b
         print(sentences_1)
-        print(lengths_1)
         print(sentences_2)
-        print(lengths_2)
         print(dists)
 
-        packed_input = pack_padded_sequence(sentences_2, lengths_2.tolist(), batch_first=True)
-        packed_output, hidden = gru(packed_input)
-        # print(packed_input)
+        packed_output, hidden = gru(sentences_1)
         print("hidden", hidden.shape)
-
         break
