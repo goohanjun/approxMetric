@@ -10,9 +10,8 @@ from tqdm import tqdm
 
 
 def train_single_epoch(args, model, optimizer, data_factory, mode):
-    cum_loss = 0.
     loss_func = torch.nn.MSELoss()
-    n_batch = 0
+    n_batch, cum_loss = 0, 0.
     for b in data_factory.get_batch(batch_size=args.batch_size, mode=mode):
         n_batch += 1
         keys, sentences_1, sentences_2, dists = b
