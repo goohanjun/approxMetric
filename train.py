@@ -93,7 +93,7 @@ if __name__ == '__main__':
                         const=True, default=False, help="True if you wanna print messages")
 
     args = Map(vars(parser.parse_args()))
-    args.model_name = f"{args.model_name}_{args.data_size}_nh{args.n_hidden}"
+    args.model_name = f"{args.model_name}_{args.data_size}_nh{args.n_hidden}_reg{args.l2_reg}"
     print(args)
 
     main(args)
