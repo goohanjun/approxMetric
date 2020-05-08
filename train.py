@@ -76,6 +76,7 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', type=int, default=128, help="batch size")
 
     # Model
+    parser.add_argument('--model_name', type=str, default="EMD", help="model name")
     parser.add_argument('--lr', type=float, default=1e-4, help="learning rate")
 
     # Debug
@@ -83,7 +84,7 @@ if __name__ == '__main__':
                         const=True, default=False, help="True if you wanna print messages")
 
     args = Map(vars(parser.parse_args()))
-    args.model_name = f"testEMD_{args.data_size}"
+    args.model_name = f"{args.model_name}_{args.data_size}"
     print(args)
 
     main(args)
