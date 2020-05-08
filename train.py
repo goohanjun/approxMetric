@@ -59,12 +59,13 @@ def main(args):
 
     # Load model
     model = ApproxEMD(n_hidden=args.n_hidden)
-    print(model)
-
     if torch.cuda.is_available(): model.cuda()
+
+    print(model)
 
     optimizer = torch.optim.Adam(model.parameters(), args.lr)
     summary_writer = SummaryWriter(f'./logs/{args.model_name}')
+
     train(args, model, optimizer, data_factory, summary_writer)
 
 

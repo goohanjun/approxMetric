@@ -14,11 +14,7 @@ class DataFactory:
         self.size = size
         self.sentences, self.train, self.valid, self.test_1, self.test_2 = self.load()
 
-        self.cuda = torch.cuda.is_available()
         self.embedding = self.load_embedding()
-        if self.cuda:
-            print("DataFactory uses CUDA")
-            self.embedding.cuda()
 
         self.init_performance()
 
@@ -80,10 +76,7 @@ class DataFactory:
         # assign pretrained embedding
         n_voca, n_dim = pretrained_embeddings.shape
         embedding = nn.Embedding(n_voca, n_dim)
-        if self.cuda:
-            embedding.weight.data = pretrained_embeddings.cuda()
-        else:
-            embedding.weight.data = pretrained_embeddings
+        embedding.weight.data = pretrained_embeddings
         return embedding
 
     def load(self):
@@ -161,13 +154,13 @@ class DataFactory:
         padded_sentences_1 = torch.LongTensor(padded_sentences_1)
         padded_sentences_2 = torch.LongTensor(padded_sentences_2)
 
+        padded_sentences_1 = self.embedding(padded_sentences_1)  # [batch, max_len_1, hidden]
+        padded_sentences_2 = self.embedding(padded_sentences_2)  # [batch, max_len_2, hidden]
+
         if self.cuda:
             lengths_1.cuda();lengths_2.cuda();
             padded_sentences_1.cuda();padded_sentences_2.cuda();
             dists.cuda()
-
-        padded_sentences_1 = self.embedding(padded_sentences_1)  # [batch, max_len_1, hidden]
-        padded_sentences_2 = self.embedding(padded_sentences_2)  # [batch, max_len_2, hidden]
 
         return keys, padded_sentences_1, padded_sentences_2, lengths_1, lengths_2, dists
 
