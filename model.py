@@ -16,15 +16,11 @@ class ApproxEMD(nn.Module):
         return
 
     def forward(self, sentences_1, sentences_2):
-        bs = sentences_1.size()[0]
-        # print("bs", bs)
-        # print("sentences_1", sentences_1.shape)
-
         _, hidden_1 = self.gru(sentences_1)
-        hidden_1 = hidden_1.view(bs, -1)
+        hidden_1 = hidden_1.unsqueeze(0)
 
         _, hidden_2 = self.gru(sentences_2)
-        hidden_2 = hidden_2.view(bs, -1)
+        hidden_2 = hidden_2.unsqueeze(0)
 
         h = torch.cat([hidden_1, hidden_2, hidden_1 * hidden_2], dim=-1)  # [bs, 3 * n_h]
         h_final = self.out_layer(h)  # [batch, 1]
