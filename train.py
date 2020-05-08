@@ -15,12 +15,12 @@ def train_single_epoch(args, model, optimizer, data_factory, summary_writer, mod
 
     data_factory.init_performance()
     for b in data_factory.get_batch(batch_size=args.batch_size, mode=mode):
-        keys, sentences_1, sentences_2, lengths_1, lengths_2, dists = b
+        keys, sentences_1, sentences_2, dists = b
 
         if mode == 'train':
             model.zero_grad()
 
-        approx_dists = model.forward(sentences_1, lengths_1, sentences_2, lengths_2)
+        approx_dists = model.forward(sentences_1, sentences_2)
 
         # for evaluation
         data_factory.collect(mode, keys, dists, approx_dists)

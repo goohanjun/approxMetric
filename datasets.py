@@ -43,6 +43,7 @@ class DataFactory:
         # MSE
         mse = 0.
         for k, v in true_dist_dict.items():
+            n_pairs += 1
             mse += (v - approx_dist_dict[k])**2.
 
         # for i in range(n_sentence):
@@ -59,7 +60,7 @@ class DataFactory:
         #                 n_hits += 1
 
         n_pairs = max(n_pairs, 1)
-        perf_dict = {"mse":mse, "n_hits": n_hits, "n_pairs": n_pairs, "comparison_accuracy": n_hits / n_pairs}
+        perf_dict = {"mse": mse / n_pairs, "n_hits": n_hits, "n_pairs": n_pairs, "comparison_accuracy": n_hits / n_pairs}
         return perf_dict
 
     def load_embedding(self):
@@ -161,11 +162,16 @@ class DataFactory:
         if torch.cuda.is_available():
             lengths_1 = lengths_1.cuda()
             lengths_2 = lengths_2.cuda()
+
+        padded_sentences_1 = pack_padded_sequence(padded_sentences_1, lengths_1.tolist(), batch_first=True, enforce_sorted=False)
+        padded_sentences_2 = pack_padded_sequence(padded_sentences_2, lengths_2.tolist(), batch_first=True, enforce_sorted=False)
+
+        if torch.cuda.is_available():
             padded_sentences_1 = padded_sentences_1.cuda()
             padded_sentences_2 = padded_sentences_2.cuda()
             dists = dists.cuda()
 
-        return keys, padded_sentences_1, padded_sentences_2, lengths_1, lengths_2, dists
+        return keys, padded_sentences_1, padded_sentences_2, dists
 
 
 if __name__ == "__main__":

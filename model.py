@@ -16,19 +16,15 @@ class ApproxEMD(nn.Module):
         self.final_act = nn.ReLU()
         return
 
-    def forward(self, sentences_1, lengths_1, sentences_2, lengths_2):
-        bs = lengths_1.size()[0]
+    def forward(self, sentences_1, sentences_2):
+        bs = sentences_1.size()[0]
         # print("bs", bs)
         # print("sentences_1", sentences_1.shape)
-        # print("lengths_1", lengths_1.shape)
-        packed_input_1 = pack_padded_sequence(sentences_1, lengths_1.tolist(), batch_first=True, enforce_sorted=False).cuda()
-        _, hidden_1 = self.gru(packed_input_1)
-        # print("hidden_1.shape", hidden_1.shape)
+
+        _, hidden_1 = self.gru(sentences_1)
         hidden_1 = hidden_1.view(bs, -1)
 
-        packed_input_2 = pack_padded_sequence(sentences_2, lengths_2.tolist(), batch_first=True, enforce_sorted=False).cuda()
-        _, hidden_2 = self.gru(packed_input_2)
-        # print("hidden_2.shape", hidden_2.shape)
+        _, hidden_2 = self.gru(sentences_2)
         hidden_2 = hidden_2.view(bs, -1)
 
         h = torch.cat([hidden_1, hidden_2, hidden_1 * hidden_2], dim=-1)  # [bs, 3 * n_h]
