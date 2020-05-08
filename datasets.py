@@ -95,7 +95,15 @@ class DataFactory:
 
         # build the vocabulary
         TEXT.build_vocab(train, vectors=torchtext.vocab.GloVe(name='6B', dim=300))
-        TEXT.build_vocab(train, vectors=torchtext.vocab.GloVe(name='6B', dim=300))
+        LABEL.build_vocab(train)
+        stoi = TEXT.vocab.stoi
+
+        sentences = []
+        _, recon_sentences = self.sentences
+        for recon_sentence in recon_sentences:
+            sentence = [stoi[w] for w in recon_sentence.split()]
+            sentences.append(sentence)
+        self.sentences = (sentences, recon_sentences)
 
         pretrained_embeddings = TEXT.vocab.vectors
 
