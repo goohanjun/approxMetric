@@ -24,9 +24,8 @@ class DataFactory:
     def init_performance(self):
         self.collected_approx_dists = {}
 
-    def collect(self, mode, keys, true_dist, approx_dist):
+    def collect(self, keys, approx_dist):
         approx_dist = approx_dist.detach().cpu().numpy()
-
         for i, k in enumerate(keys):
             self.collected_approx_dists[k] = approx_dist[i]
         return
@@ -35,26 +34,30 @@ class DataFactory:
         perf_dict = {}
 
         train_size = int(self.size * 0.8)
-        wmd_dist_matrix = np.zeros(shape=(self.size, self.size))
-        rwmd_dist_matrix = np.zeros(shape=(self.size, self.size))
+        test_size = self.size - train_size
+        wmd_dist_matrix, rwmd_dist_matrix = self.wmd_dist_matrix, self.rwmd_dist_matrix
+
         approx_dist_matrix = np.zeros(shape=(self.size, self.size))
-
-        for (i, j), v  in self.results.items():
-            wmd_dist_matrix[(j, i)] = wmd_dist_matrix[(i, j)] = v['dist_wmd']
-            rwmd_dist_matrix[(j, i)] = rwmd_dist_matrix[(i, j)] = v['dist_rwmd']
-
         for (i, j), v in self.collected_approx_dists.items():
             approx_dist_matrix[(j, i)] = approx_dist_matrix[(i, j)] = v
 
-        n_pairs = len(wmd_dist_matrix[:, train_size:] .nonzero()[0])
-        perf_dict['test/mse_rwmd'] = np.sum((wmd_dist_matrix[:, train_size:] - rwmd_dist_matrix[:, train_size:]) ** 2.) / n_pairs
-        perf_dict['test/mse_approx'] = np.sum((wmd_dist_matrix[:, train_size:] - approx_dist_matrix[:, train_size:]) ** 2.) / n_pairs
-        perf_dict['test/n_pairs'] = n_pairs // 2  # symmetry matrix
+        def mse_score(dist_matrix_1, dist_matrix_2, train_size, test_size):
+            area_all = np.sum((dist_matrix_1 - dist_matrix_2) ** 2.)
+            area_a = np.sum((dist_matrix_1[:train_size, :train_size] - dist_matrix_2[:train_size, :train_size]) ** 2.)
+            area_b = np.sum((dist_matrix_1[train_size:, train_size:] - dist_matrix_2[train_size:, train_size:]) ** 2.)
+            area_d = (area_all - area_a - area_b) / 2
 
-        n_pairs = len(wmd_dist_matrix[:, :train_size] .nonzero()[0])
-        perf_dict['train/mse_rwmd'] = np.sum((wmd_dist_matrix[:, :train_size] - rwmd_dist_matrix[:, :train_size]) ** 2.) / n_pairs
-        perf_dict['train/mse_approx'] = np.sum((wmd_dist_matrix[:, :train_size] - approx_dist_matrix[:, :train_size]) ** 2.) / n_pairs
-        perf_dict['train/n_pairs'] = n_pairs // 2
+            mse_train = area_a / (train_size * train_size)
+            mse_test = (area_d + area_b) / (train_size * test_size + test_size * (test_size + 1) / 2)
+            return mse_train, mse_test
+
+        rwmd_mse_train, rwmd_mse_test = mse_score(wmd_dist_matrix, rwmd_dist_matrix, train_size, test_size)
+        perf_dict['train/mse_rwmd'] = rwmd_mse_train
+        perf_dict['test/mse_rwmd'] = rwmd_mse_test
+
+        approx_mse_train, approx_mse_test = mse_score(wmd_dist_matrix, approx_dist_matrix, train_size, test_size)
+        perf_dict['train/mse_approx'] = approx_mse_train
+        perf_dict['test/mse_approx'] = approx_mse_test
 
         # Compute score
         def comp_score(dists_1, dists_2):
@@ -120,22 +123,36 @@ class DataFactory:
             exit()
 
         # split 8:2
-        train_set_size = int(self.size * 0.8)
-        train_set = {i for i in range(train_set_size)}
-        test_set = {i for i in range(train_set_size, self.size)}
+        train_size = int(self.size * 0.8)
+        train_set = {i for i in range(train_size)}
+        test_set = {i for i in range(train_size, self.size)}
+
+        wmd_dist_matrix, rwmd_dist_matrix = np.zeros((self.size, self.size)), np.zeros((self.size, self.size))
+        for (i, j), v in results.items():
+            wmd_dist_matrix[j, i] = wmd_dist_matrix[i, j] = v['dist_wmd']
+            rwmd_dist_matrix[j, i] = rwmd_dist_matrix[i, j] = v['dist_rwmd']
+
+        wmd_mu, wmd_std = np.mean(wmd_dist_matrix[:train_size, :train_size]), np.std(wmd_dist_matrix[:train_size, :train_size])
+        rwmd_mu, rwmd_std = np.mean(rwmd_dist_matrix[:train_size, :train_size]), np.std(rwmd_dist_matrix[:train_size, :train_size])
+
+        wmd_dist_matrix = (wmd_dist_matrix - wmd_mu) / wmd_std
+        rwmd_dist_matrix = (rwmd_dist_matrix - rwmd_mu) / rwmd_std
+
+        self.mu, self.std = wmd_mu, wmd_std
+        self.wmd_dist_matrix, self.rwmd_dist_matrix = wmd_dist_matrix, rwmd_dist_matrix
 
         train_result, valid_result, test_1_result, test_2_result = {}, {}, {}, {}
-        for j in range(500):
+        for j in range(self.size):
             for i in range(j):
                 if i in train_set and j in train_set:
                     if random.random() > 0.2:
-                        train_result[(i, j)] = results[(i, j)]
+                        train_result[(i, j)] = wmd_dist_matrix[i, j]
                     else:
-                        valid_result[(i, j)] = results[(i, j)]
+                        valid_result[(i, j)] = wmd_dist_matrix[i, j]
                 elif i in train_set and j in test_set:
-                    test_1_result[(i, j)] = results[(i, j)]
+                    test_1_result[(i, j)] = wmd_dist_matrix[i, j]
                 elif i in test_set and j in test_set:
-                    test_2_result[(i, j)] = results[(i, j)]
+                    test_2_result[(i, j)] = wmd_dist_matrix[i, j]
 
         return train_result, valid_result, test_1_result, test_2_result
 
@@ -149,7 +166,7 @@ class DataFactory:
         for k, v in results.items():
             i, j = k
             keys.append(k)
-            batch.append((sentences[i], sentences[j], v['dist_wmd']))
+            batch.append((sentences[i], sentences[j], v))
             if len(batch) == batch_size:
                 yield self.tensorize(batch, keys)
                 batch.clear(); keys.clear()

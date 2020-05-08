@@ -22,7 +22,7 @@ def train_single_epoch(args, model, optimizer, data_factory, summary_writer, mod
         approx_dists = model.forward(sentences_1, sentences_2)
 
         # for evaluation
-        data_factory.collect(mode, keys, dists, approx_dists)
+        data_factory.collect(keys, approx_dists)
 
         loss = loss_func(dists, approx_dists)
         cum_loss += loss.item()
@@ -34,8 +34,7 @@ def train_single_epoch(args, model, optimizer, data_factory, summary_writer, mod
 
 
 def train(args, model, optimizer, data_factory, summary_writer):
-
-    for epoch in tqdm(range(100)):
+    for epoch in tqdm(range(300)):
         data_factory.init_performance()
 
         for mode in ['train', 'valid', 'test_1', 'test_2']:

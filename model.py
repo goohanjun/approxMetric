@@ -10,6 +10,7 @@ class ApproxEMD(nn.Module):
         self.gru = nn.RNN(input_size=300, hidden_size=n_hidden, num_layers=1, bidirectional=False, batch_first=True)
 
         self.out_layer = MLP(input_hidden=n_hidden * 3, n_hiddens=[n_hidden, n_hidden])
+        self.out_act = nn.ReLU()
         self.final_layer = nn.Linear(n_hidden, 1)
         self.final_act = nn.ReLU()
         return
@@ -22,11 +23,9 @@ class ApproxEMD(nn.Module):
         hidden_2 = hidden_2.unsqueeze(0)
 
         h = torch.cat([hidden_1, hidden_2, hidden_1 * hidden_2], dim=-1)  # [bs, 3 * n_h]
-        h_final = self.out_layer(h)  # [batch, 1]
+        h_final = self.out_act(self.out_layer(h))  # [batch, 1]
 
-        approx_dist = self.final_act(self.final_layer(h_final))
-
-        return approx_dist.view(-1)  # [batch]
+        return self.final_layer(h_final).view(-1)  # [batch]
 
 
 class MLP(nn.Module):
