@@ -16,7 +16,9 @@ class DataFactory:
 
         self.cuda = torch.cuda.is_available()
         self.embedding = self.load_embedding()
-        if self.cuda: self.embedding.cuda()
+        if self.cuda:
+            print("DataFactory uses CUDA")
+            self.embedding.cuda()
 
         self.init_performance()
 
