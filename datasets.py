@@ -4,6 +4,8 @@ import torchtext
 import torchtext.data as data
 import torchtext.datasets as datasets
 
+from sklearn.metrics import ndcg_score
+
 import random
 import pickle
 from torch.nn.utils.rnn import pack_padded_sequence
@@ -23,7 +25,6 @@ class DataFactory:
         self.collected_approx_dists = {}
 
     def collect(self, mode, keys, true_dist, approx_dist):
-        true_dist = true_dist.cpu().numpy()
         approx_dist = approx_dist.detach().cpu().numpy()
 
         for i, k in enumerate(keys):
@@ -39,73 +40,49 @@ class DataFactory:
         approx_dist_matrix = np.zeros(shape=(self.size, self.size))
 
         for (i, j), v  in self.results.items():
-            wmd_dist_matrix[(i, j)] = v['dist_wmd']
-            wmd_dist_matrix[(j, i)] = v['dist_wmd']
-            rwmd_dist_matrix[(i, j)] = v['dist_rwmd']
-            rwmd_dist_matrix[(j, i)] = v['dist_rwmd']
+            wmd_dist_matrix[(j, i)] = wmd_dist_matrix[(i, j)] = v['dist_wmd']
+            rwmd_dist_matrix[(j, i)] = rwmd_dist_matrix[(i, j)] = v['dist_rwmd']
 
         for (i, j), v in self.collected_approx_dists.items():
-            approx_dist_matrix[(i, j)] = v
-            approx_dist_matrix[(j, i)] = v
+            approx_dist_matrix[(j, i)] = approx_dist_matrix[(i, j)] = v
 
         n_pairs = len(wmd_dist_matrix[:, train_size:] .nonzero()[0])
-        perf_dict['test_mse_rwmd'] = np.sum((wmd_dist_matrix[:, train_size:] - rwmd_dist_matrix[:, train_size:]) ** 2.) / n_pairs
-        perf_dict['test_mse_approx'] = np.sum((wmd_dist_matrix[:, train_size:] - approx_dist_matrix[:, train_size:]) ** 2.) / n_pairs
-        perf_dict['test_n_pairs'] = n_pairs // 2  # symmetry matrix
+        perf_dict['test/mse_rwmd'] = np.sum((wmd_dist_matrix[:, train_size:] - rwmd_dist_matrix[:, train_size:]) ** 2.) / n_pairs
+        perf_dict['test/mse_approx'] = np.sum((wmd_dist_matrix[:, train_size:] - approx_dist_matrix[:, train_size:]) ** 2.) / n_pairs
+        perf_dict['test/n_pairs'] = n_pairs // 2  # symmetry matrix
 
         n_pairs = len(wmd_dist_matrix[:, :train_size] .nonzero()[0])
-        perf_dict['train_mse_rwmd'] = np.sum((wmd_dist_matrix[:, :train_size] - rwmd_dist_matrix[:, :train_size]) ** 2.) / n_pairs
-        perf_dict['train_mse_approx'] = np.sum((wmd_dist_matrix[:, :train_size] - approx_dist_matrix[:, :train_size]) ** 2.) / n_pairs
-        perf_dict['train_n_pairs'] = n_pairs // 2
+        perf_dict['train/mse_rwmd'] = np.sum((wmd_dist_matrix[:, :train_size] - rwmd_dist_matrix[:, :train_size]) ** 2.) / n_pairs
+        perf_dict['train/mse_approx'] = np.sum((wmd_dist_matrix[:, :train_size] - approx_dist_matrix[:, :train_size]) ** 2.) / n_pairs
+        perf_dict['train/n_pairs'] = n_pairs // 2
 
-        def dcg_at_k(r, k, method=0):
-            r = np.asfarray(r)[:k]
-            if r.size:
-                if method == 0:
-                    return r[0] + np.sum(r[1:] / np.log2(np.arange(2, r.size + 1)))
-                elif method == 1:
-                    return np.sum(r / np.log2(np.arange(2, r.size + 2)))
-                else:
-                    raise ValueError('method must be 0 or 1.')
-            return 0.
+        # Compute score
+        def comp_score(dists_1, dists_2):
+            size = len(dists_1) * (len(dists_1) - 1) // 2
+            comp_1 = dists_1.reshape(-1, 1) >= dists_1.reshape(1, -1)
+            comp_2 = dists_2.reshape(-1, 1) >= dists_2.reshape(1, -1)
+            score = (np.sum(comp_1 & comp_2) - len(dists_1)) / size
+            return score
 
-        def ndcg_at_k(r, k=20, method=1):
-            dcg_max = dcg_at_k(sorted(r, reverse=True), k, method)
-            if not dcg_max:
-                return 0.
-            return dcg_at_k(r, k, method) / dcg_max
+        wmd_comp, rwmd_comp, approx_comp = [], [], []
+        for q_idx in range(train_size, self.size):
+            wmd_comp.append(comp_score(wmd_dist_matrix[q_idx, :], wmd_dist_matrix[q_idx, :]))
+            rwmd_comp.append(comp_score(wmd_dist_matrix[q_idx, :], rwmd_dist_matrix[q_idx, :]))
+            approx_comp.append(comp_score(wmd_dist_matrix[q_idx, :], approx_dist_matrix[q_idx, :]))
 
-        def get_ndcg(true_dists, target_scores, top_k):
-            merged_list = list(zip(true_dists, target_scores))
+        perf_dict[f'test/wmd_comp_accuracy'] = np.mean(wmd_comp)
+        perf_dict[f'test/rwmd_comp_accuracy'] = np.mean(rwmd_comp)
+        perf_dict[f'test/approx_comp_accuracy'] = np.mean(approx_comp)
 
-            rel_list = sorted(merged_list, key=lambda x: x[0])  # lower true distance come first
-            _, rel_list = zip(*rel_list)
-            ndcg = ndcg_at_k(rel_list, top_k)
-            return ndcg
+        wmd_comp, rwmd_comp, approx_comp = [], [], []
+        for q_idx in range(train_size):
+            wmd_comp.append(comp_score(wmd_dist_matrix[q_idx, :], wmd_dist_matrix[q_idx, :]))
+            rwmd_comp.append(comp_score(wmd_dist_matrix[q_idx, :], rwmd_dist_matrix[q_idx, :]))
+            approx_comp.append(comp_score(wmd_dist_matrix[q_idx, :], approx_dist_matrix[q_idx, :]))
 
-        # Compute ndcg
-        wmd_scores = 10000. - wmd_dist_matrix
-        rwmd_scores = 10000. - rwmd_dist_matrix
-        approx_scores = 10000. - approx_dist_matrix
-
-        for top_k in [10, 20, 50]:
-
-            wmd_ndcg, rwmd_ndcg, approx_ndcg = [], [], []
-
-            for q_idx in range(train_size, self.size):
-                q_true_dists = list(wmd_dist_matrix[q_idx, :])
-
-                q_wmd_scores = list(wmd_scores[q_idx, :])
-                q_rwmd_scores = list(rwmd_scores[q_idx, :])
-                q_approx_scores = list(approx_scores[q_idx, :])
-
-                wmd_ndcg.append(get_ndcg(q_true_dists, q_wmd_scores, top_k))
-                rwmd_ndcg.append(get_ndcg(q_true_dists, q_rwmd_scores, top_k))
-                approx_ndcg.append(get_ndcg(q_true_dists, q_approx_scores, top_k))
-
-            perf_dict[f'wmd_ndcg_{top_k}'] = np.mean(rwmd_ndcg)
-            perf_dict[f'rwmd_ndcg_{top_k}'] = np.mean(rwmd_ndcg)
-            perf_dict[f'approx_ndcg_{top_k}'] = np.mean(approx_ndcg)
+        perf_dict[f'train/wmd_comp_accuracy'] = np.mean(wmd_comp)
+        perf_dict[f'train/rwmd_comp_accuracy'] = np.mean(rwmd_comp)
+        perf_dict[f'train/approx_comp_accuracy'] = np.mean(approx_comp)
 
         return perf_dict
 

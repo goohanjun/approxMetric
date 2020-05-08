@@ -45,6 +45,7 @@ def train(args, model, optimizer, data_factory, summary_writer):
         perf_dict = data_factory.eval_performance()
         for k, v in perf_dict.items():
             summary_writer.add_scalar(f'performance/{k}', v, epoch)
+        print(perf_dict)
 
 
 def main(args):
