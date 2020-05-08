@@ -157,7 +157,7 @@ class DataFactory:
         padded_sentences_1 = self.embedding(padded_sentences_1)  # [batch, max_len_1, hidden]
         padded_sentences_2 = self.embedding(padded_sentences_2)  # [batch, max_len_2, hidden]
 
-        if self.cuda:
+        if torch.cuda.is_available():
             lengths_1.cuda();lengths_2.cuda();
             padded_sentences_1.cuda();padded_sentences_2.cuda();
             dists.cuda()
