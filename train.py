@@ -43,6 +43,8 @@ def train(args, model, optimizer, data_factory, summary_writer):
             loss = train_single_epoch(args, model, optimizer, data_factory, summary_writer, mode)
             perf_dict = data_factory.eval_performance(mode)
 
+            if mode == 'train': print(perf_dict)
+
             summary_writer.add_scalar(f'{mode}/loss', loss, epoch)
             for k, v in perf_dict.items():
                 summary_writer.add_scalar(f'{mode}/{k}', v, epoch)
