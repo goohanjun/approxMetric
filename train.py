@@ -59,7 +59,8 @@ def main(args):
 
     # Load model
     model = ApproxEMD(n_hidden=args.n_hidden)
-    if torch.cuda.is_available(): model.cuda()
+    if torch.cuda.is_available():
+        model = model.cuda()
 
     print(model)
 
