@@ -58,6 +58,7 @@ class DataFactory:
         #             elif dist_1 < dist_2 and approx_dist_1 < approx_dist_2:
         #                 n_hits += 1
 
+        n_pairs = max(n_pairs, 1)
         perf_dict = {"mse":mse, "n_hits": n_hits, "n_pairs": n_pairs, "comparison_accuracy": n_hits / n_pairs}
         return perf_dict
 
