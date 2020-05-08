@@ -61,6 +61,10 @@ if __name__ == '__main__':
     args = Map(vars(parser.parse_args()))
     print(args)
 
-    args.model_naem = "testEMD"
+    args.model_name = "testEMD"
+
+    with open('./wmd_results_500.pkl', 'rb') as f:
+        data = pickle.load(f)
+
 
     main(args)

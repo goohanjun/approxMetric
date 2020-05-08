@@ -15,7 +15,7 @@ import argparse
 import pickle
 from tqdm import tqdm
 import time
-from utils import Map
+from utils import Map, str2bool
 
 
 def prepare_emd(sentence_1, sentence_2, embedding):
@@ -94,6 +94,8 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--data_size', type=int, default=100, help="number of sentence size")
+    parser.add_argument('--dump_sentence_only', type=str2bool, nargs='?',
+                        const=True, default=False, help="True if you wanna print messages")
     args = Map(vars(parser.parse_args()))
     print(args)
 
@@ -135,6 +137,12 @@ if __name__ == "__main__":
 
     print(f"{len(sentences)} sentences loaded")
 
+    with open(f"./wmd_sentences_{len(sentences)}.pkl", 'wb') as f:
+        pickle.dump((sentences, recon_sentences), f)
+
+    if args.dump_sentence_only:
+        exit()
+
     calc_flow = False
 
     n_pairs, results = 0, {}
@@ -160,5 +168,5 @@ if __name__ == "__main__":
 
     print(f"Total time took {total_end - total_start:.2f} seconds. Avg. = {(total_end - total_start) / n_pairs:.4f}")
 
-    with open(f"./wmd results_{len(sentences)}.pkl", 'wb') as f:
+    with open(f"./wmd_results_{len(sentences)}.pkl", 'wb') as f:
         pickle.dump(results, f)
