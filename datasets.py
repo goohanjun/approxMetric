@@ -52,12 +52,12 @@ class DataFactory:
             return mse_train, mse_test
 
         rwmd_mse_train, rwmd_mse_test = mse_score(wmd_dist_matrix, rwmd_dist_matrix, train_size, test_size)
-        perf_dict['train/mse_rwmd'] = rwmd_mse_train
-        perf_dict['test/mse_rwmd'] = rwmd_mse_test
+        perf_dict['rwmd/mse_train'] = rwmd_mse_train
+        perf_dict['rwmd/mse_test'] = rwmd_mse_test
 
         approx_mse_train, approx_mse_test = mse_score(wmd_dist_matrix, approx_dist_matrix, train_size, test_size)
-        perf_dict['train/mse_approx'] = approx_mse_train
-        perf_dict['test/mse_approx'] = approx_mse_test
+        perf_dict['approx/mse_train'] = approx_mse_train
+        perf_dict['approx/mse_test'] = approx_mse_test
 
         # Compute score
         def comp_score(dists_1, dists_2):
@@ -69,23 +69,21 @@ class DataFactory:
 
         wmd_comp, rwmd_comp, approx_comp = [], [], []
         for q_idx in range(train_size, self.size):
-            wmd_comp.append(comp_score(wmd_dist_matrix[q_idx, :], wmd_dist_matrix[q_idx, :]))
+            # wmd_comp.append(comp_score(wmd_dist_matrix[q_idx, :], wmd_dist_matrix[q_idx, :]))
             rwmd_comp.append(comp_score(wmd_dist_matrix[q_idx, :], rwmd_dist_matrix[q_idx, :]))
             approx_comp.append(comp_score(wmd_dist_matrix[q_idx, :], approx_dist_matrix[q_idx, :]))
 
-        perf_dict[f'test/wmd_comp_accuracy'] = np.mean(wmd_comp)
-        perf_dict[f'test/rwmd_comp_accuracy'] = np.mean(rwmd_comp)
-        perf_dict[f'test/approx_comp_accuracy'] = np.mean(approx_comp)
+        perf_dict[f'rwmd/comp_accuracy_test'] = np.mean(rwmd_comp)
+        perf_dict[f'approx/comp_accuracy_test'] = np.mean(approx_comp)
 
         wmd_comp, rwmd_comp, approx_comp = [], [], []
         for q_idx in range(train_size):
-            wmd_comp.append(comp_score(wmd_dist_matrix[q_idx, :], wmd_dist_matrix[q_idx, :]))
+            # wmd_comp.append(comp_score(wmd_dist_matrix[q_idx, :], wmd_dist_matrix[q_idx, :]))
             rwmd_comp.append(comp_score(wmd_dist_matrix[q_idx, :], rwmd_dist_matrix[q_idx, :]))
             approx_comp.append(comp_score(wmd_dist_matrix[q_idx, :], approx_dist_matrix[q_idx, :]))
 
-        perf_dict[f'train/wmd_comp_accuracy'] = np.mean(wmd_comp)
-        perf_dict[f'train/rwmd_comp_accuracy'] = np.mean(rwmd_comp)
-        perf_dict[f'train/approx_comp_accuracy'] = np.mean(approx_comp)
+        perf_dict[f'rwmd/comp_accuracy_train'] = np.mean(rwmd_comp)
+        perf_dict[f'approx/comp_accuracy_train'] = np.mean(approx_comp)
 
         return perf_dict
 
@@ -215,9 +213,9 @@ class DataFactory:
 if __name__ == "__main__":
 
     data_factory = DataFactory(size=30)
-    gru = nn.RNN(input_size=300, hidden_size=15, num_layers=1, bidirectional=False, batch_first=True)
+    gru = nn.GRU(input_size=300, hidden_size=15, num_layers=1, bidirectional=True, batch_first=True)
 
-    for b in data_factory.get_batch(batch_size=2, mode='train'):
+    for b in data_factory.get_batch(batch_size=3, mode='train'):
         keys, sentences_1, sentences_2, dists = b
         print(sentences_1)
         print(sentences_2)

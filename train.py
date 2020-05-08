@@ -9,7 +9,7 @@ from datasets import DataFactory
 from tqdm import tqdm
 
 
-def train_single_epoch(args, model, optimizer, data_factory, summary_writer, mode):
+def train_single_epoch(args, model, optimizer, data_factory, mode):
     cum_loss = 0.
     loss_func = torch.nn.MSELoss()
 
@@ -33,17 +33,24 @@ def train_single_epoch(args, model, optimizer, data_factory, summary_writer, mod
     return cum_loss
 
 
-def train(args, model, optimizer, data_factory, summary_writer):
+def train(args, model, optimizer, data_factory, summary_writers):
+    summary_writer_train, summary_writer_test = summary_writers
     for epoch in tqdm(range(300)):
         data_factory.init_performance()
 
         for mode in ['train', 'valid', 'test_1', 'test_2']:
-            loss = train_single_epoch(args, model, optimizer, data_factory, summary_writer, mode)
-            summary_writer.add_scalar(f'loss/{mode}', loss, epoch)
+            loss = train_single_epoch(args, model, optimizer, data_factory, mode)
+            if mode == 'train': summary_writer_train.add_scalar(f'loss/loss', loss, epoch)
+            elif mode == 'valid': summary_writer_test.add_scalar(f'loss/loss', loss, epoch)
+            elif 'test' in mode: summary_writer_test.add_scalar(f'loss/{mode}_loss', loss, epoch)
 
         perf_dict = data_factory.eval_performance()
         for k, v in perf_dict.items():
-            summary_writer.add_scalar(f'performance/{k}', v, epoch)
+            alg, key = k.split('/')
+            if alg == 'approx':
+                summary_writer_train.add_scalar(f'{key}', v, epoch)
+            else:
+                summary_writer_test.add_scalar(f'{key}', v, epoch)
         print(perf_dict)
 
 
@@ -62,9 +69,10 @@ def main(args):
     print(model)
 
     optimizer = torch.optim.Adam(model.parameters(), args.lr)
-    summary_writer = SummaryWriter(f'./logs/{args.model_name}')
+    sw_train = SummaryWriter(f'./logs/{args.model_name}_train')
+    sw_test = SummaryWriter(f'./logs/{args.model_name}_test')
 
-    train(args, model, optimizer, data_factory, summary_writer)
+    train(args, model, optimizer, data_factory, (sw_train, sw_test))
 
 
 if __name__ == '__main__':
@@ -72,7 +80,7 @@ if __name__ == '__main__':
 
     # Dataset
     parser.add_argument('--data_size', type=int, default=30, help="Data sentence size")
-    parser.add_argument('--n_hidden', type=int, default=64, help="hidden dimension size")
+    parser.add_argument('--n_hidden', type=int, default=128, help="hidden dimension size")
     parser.add_argument('--batch_size', type=int, default=128, help="batch size")
 
     # Model
@@ -84,7 +92,7 @@ if __name__ == '__main__':
                         const=True, default=False, help="True if you wanna print messages")
 
     args = Map(vars(parser.parse_args()))
-    args.model_name = f"{args.model_name}_{args.data_size}"
+    args.model_name = f"{args.model_name}_{args.data_size}_nh{args.n_hidden}"
     print(args)
 
     main(args)

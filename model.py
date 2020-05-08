@@ -7,9 +7,9 @@ class ApproxEMD(nn.Module):
     def __init__(self, n_hidden):
         super().__init__()
         self.n_hidden = n_hidden
-        self.gru = nn.RNN(input_size=300, hidden_size=n_hidden, num_layers=1, bidirectional=False, batch_first=True)
+        self.gru = nn.GRU(input_size=300, hidden_size=n_hidden, num_layers=1, bidirectional=True, batch_first=True)
 
-        self.out_layer = MLP(input_hidden=n_hidden * 3, n_hiddens=[n_hidden, n_hidden])
+        self.out_layer = MLP(input_hidden=n_hidden * 6, n_hiddens=[n_hidden, n_hidden])
         self.out_act = nn.ReLU()
         self.final_layer = nn.Linear(n_hidden, 1)
         self.final_act = nn.ReLU()
@@ -17,12 +17,15 @@ class ApproxEMD(nn.Module):
 
     def forward(self, sentences_1, sentences_2):
         _, hidden_1 = self.gru(sentences_1)
-        hidden_1 = hidden_1.unsqueeze(0)
+        hidden_1 = torch.transpose(hidden_1, 0, 1)  # [batch, 2, n_h]
+        bs = hidden_1.size()[0]
+        hidden_1 = hidden_1.view(bs, -1)
 
         _, hidden_2 = self.gru(sentences_2)
-        hidden_2 = hidden_2.unsqueeze(0)
+        hidden_2 = torch.transpose(hidden_2, 0, 1)  # [batch, 2, n_h]
+        hidden_2 = hidden_2.view(bs, -1)
 
-        h = torch.cat([hidden_1, hidden_2, hidden_1 * hidden_2], dim=-1)  # [bs, 3 * n_h]
+        h = torch.cat([hidden_1, hidden_2, hidden_1 - hidden_2], dim=-1)  # [bs, 6 * n_h]
         h_final = self.out_act(self.out_layer(h))  # [batch, 1]
 
         return self.final_layer(h_final).view(-1)  # [batch]
