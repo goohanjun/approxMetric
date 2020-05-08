@@ -19,11 +19,12 @@ class ApproxEMD(nn.Module):
         _, hidden_1 = self.gru(sentences_1)
         hidden_1 = torch.transpose(hidden_1, 0, 1)  # [batch, 2, n_h]
         bs = hidden_1.size()[0]
-        hidden_1 = hidden_1.view(bs, -1)
+        # print(bs)
+        hidden_1 = hidden_1.reshape(bs, -1)
 
         _, hidden_2 = self.gru(sentences_2)
         hidden_2 = torch.transpose(hidden_2, 0, 1)  # [batch, 2, n_h]
-        hidden_2 = hidden_2.view(bs, -1)
+        hidden_2 = hidden_2.reshape(bs, -1)
 
         h = torch.cat([hidden_1, hidden_2, hidden_1 - hidden_2], dim=-1)  # [bs, 6 * n_h]
         h_final = self.out_act(self.out_layer(h))  # [batch, 1]
