@@ -3,7 +3,7 @@ import argparse
 from utils import Map, str2bool
 import random
 import numpy as np
-from model import ApproxEMD
+from model import ApproxEMD, ApproxEMDAttention
 from torch.utils.tensorboard import SummaryWriter
 from datasets import DataFactory
 from tqdm import tqdm
@@ -62,7 +62,10 @@ def main(args):
     data_factory = DataFactory(size=args.data_size)
 
     # Load model
-    model = ApproxEMD(n_hidden=args.n_hidden)
+    if 'att' in args.model_name:
+        model = ApproxEMDAttention(n_hidden=args.n_hidden)
+    else:
+        model = ApproxEMD(n_hidden=args.n_hidden)
     if torch.cuda.is_available():
         model = model.cuda()
 
@@ -80,7 +83,7 @@ if __name__ == '__main__':
 
     # Dataset
     parser.add_argument('--data_size', type=int, default=30, help="Data sentence size")
-    parser.add_argument('--n_hidden', type=int, default=128, help="hidden dimension size")
+    parser.add_argument('--n_hidden', type=int, default=64, help="hidden dimension size")
     parser.add_argument('--batch_size', type=int, default=128, help="batch size")
 
     # Model

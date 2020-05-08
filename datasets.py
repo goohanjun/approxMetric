@@ -4,8 +4,6 @@ import torchtext
 import torchtext.data as data
 import torchtext.datasets as datasets
 
-from sklearn.metrics import ndcg_score
-
 import random
 import pickle
 from torch.nn.utils.rnn import pack_padded_sequence
