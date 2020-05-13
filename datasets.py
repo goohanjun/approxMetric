@@ -43,10 +43,12 @@ class DataFactory:
                 avg = (dist_a + dist_b) / 2.
             elif ensemble_type == 'mean':
                 avg = np.sqrt(dist_a * dist_b + 1e-8)
+            else:
+                raise NotImplementedError
             return avg
 
         for lower_type in ['rwmd', 'omr', 'act', 'ict']:
-            for ensemble_type in ['mean', 'geomtric', 'harmonic']:
+            for ensemble_type in ['mean', 'geometric', 'harmonic']:
                 dist_matrix = ensemble_dists(dist_matrix_dict[lower_type], dist_matrix_dict['UB_G'], ensemble_type)
                 dist_perf_dict = self.eval_dist_matrix(dist_name=f"Ens_{ensemble_type}_{lower_type}", dist_matrix=dist_matrix)
                 perf_dict.update(dist_perf_dict)
