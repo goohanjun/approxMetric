@@ -183,6 +183,7 @@ class MLP(nn.Module):
     def __init__(self, input_hidden, n_hiddens=[64, 64], final_act=False):
         super().__init__()
         self.n_hiddens = n_hiddens.copy()
+        self.final_act = final_act
         self.layers = nn.ModuleList()
         self.act_layers = nn.ModuleList()
         h_in = input_hidden
