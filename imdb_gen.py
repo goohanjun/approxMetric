@@ -35,7 +35,7 @@ def prepare_emd(sentence_1, sentence_2, embedding):
 
     word_tensor = torch.LongTensor(total_word_list)
     if torch.cuda.is_available():
-        word_tensor.cuda()
+        word_tensor = word_tensor.cuda()
 
     word_emb_tensor = embedding(word_tensor)
     dists = torch.sqrt(torch.sum((word_emb_tensor.unsqueeze(0) - word_emb_tensor.unsqueeze(1)) ** 2., dim=-1) + 1e-10)
@@ -163,7 +163,7 @@ def gen(args):
     results_prev, sentences = load(args)
 
     if len(results_prev) > 0:
-        # Loaded
+        print("Loaded from pickle")
         _, recon_sentences = sentences
         idx_sentences = []
         for recon_sentence in recon_sentences:
