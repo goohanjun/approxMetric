@@ -13,6 +13,8 @@ class ApproxEMD(nn.Module):
         self.name = "SymAttention"
         self.n_hidden = n_hidden
 
+        self.emb_layer = MLP(input_hidden=300, n_hiddens=[n_hidden])
+
         self.query_layer = MLP(input_hidden=n_hidden * 3, n_hiddens=[n_hidden, n_hidden])
         self.query_act = nn.ReLU()
 
@@ -32,7 +34,9 @@ class ApproxEMD(nn.Module):
             seq_len_1 = seq_len_1.cuda(); seq_len_2 = seq_len_2.cuda()
 
         # [batch, length, n_dim]
-        mean_seq, max_seq, min_seq = 0., 0., 0.
+        seq_1 = self.emb_layer(seq_1)
+        seq_2 = self.emb_layer(seq_2)
+
         q_1 = torch.cat([torch.max(seq_1, dim=1)[0], torch.min(seq_1, dim=1)[0], torch.sum(seq_1, dim=1) / seq_len_1.view(-1, 1)], dim=-1)
         q_1 = self.query_act(self.query_layer(q_1))  # [batch, n_hidden]
         q_2 = torch.cat([torch.max(seq_2, dim=1)[0], torch.min(seq_2, dim=1)[0], torch.sum(seq_2, dim=1) / seq_len_2.view(-1, 1)], dim=-1)
