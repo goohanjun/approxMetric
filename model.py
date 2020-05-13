@@ -28,18 +28,18 @@ class ApproxEMD(nn.Module):
         self.final_layer = nn.Linear(n_hidden, 1)
 
     def forward(self, sentences_1, sentences_2):
-        print("model_1")
+        # print("model_1")
         seq_1, seq_len_1 = pad_packed_sequence(sentences_1, batch_first=True)
         seq_2, seq_len_2 = pad_packed_sequence(sentences_2, batch_first=True)
         if torch.cuda.is_available():
             seq_len_1 = seq_len_1.cuda(); seq_len_2 = seq_len_2.cuda()
 
-        print("model_2")
+        # print("model_2")
         # [batch, length, n_dim]
         seq_1 = self.emb_layer(seq_1)
         seq_2 = self.emb_layer(seq_2)
 
-        print("model_3")
+        # print("model_3")
         q_1 = torch.cat([torch.max(seq_1, dim=1)[0], torch.min(seq_1, dim=1)[0], torch.sum(seq_1, dim=1) / seq_len_1.view(-1, 1)], dim=-1)
         q_1 = self.query_act(self.query_layer(q_1))  # [batch, n_hidden]
         q_2 = torch.cat([torch.max(seq_2, dim=1)[0], torch.min(seq_2, dim=1)[0], torch.sum(seq_2, dim=1) / seq_len_2.view(-1, 1)], dim=-1)
@@ -152,23 +152,35 @@ class BatchScaledDotProductAttention(nn.Module):
                 seq_length ( ... )
             note: dv == dk
         '''
+        print("Attn_1")
         h = self.q_layer(h).unsqueeze(-1)  # [ batch * h * 1 ]
         k = self.k_layer(seq)  # [ batch, length, h ]
         v = self.v_layer(seq)  # [ batch, length, h ]
+
+        print("Attn_2")
         scores = torch.matmul(k, h)  # [batch, length, 1]
-        # print("scores", scores.size())
+        print("scores", scores.size())
         scores = scores.squeeze(2)  # [ batch, length ]
-        # print("scores", scores.size())
+        print("scores", scores.size())
 
+        print("Attn_3")
         kv_mask = self.get_a_mask(seq_length)  # [ batch, length ]
+        print("kv_mask", kv_mask.size())
 
+        print("Attn_4")
         scores = scores.masked_fill(kv_mask == 0, -1e9)
 
+        print("Attn_5")
         weight = F.softmax(scores / self.temper, dim=-1).unsqueeze(1)
-        # print("weight", weight.size())  # [batch, 1, length]
+        print("weight", weight.size())  # [batch, 1, length]
         output = torch.matmul(weight, v)  # [batch, 1, length] -> [batch, 1, h]
+        print("output", output.size())  # [batch, 1, length]
+
+        print("Attn_6")
         output = self.out_linear(output.squeeze(1))  # [batch, h]
         output = F.elu(output)
+
+        print("Attn_7")
         return output
 
     # Generate a boolean mask
