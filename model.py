@@ -32,7 +32,7 @@ class ApproxEMD(nn.Module):
         seq_1, seq_len_1 = pad_packed_sequence(sentences_1, batch_first=True)
         seq_2, seq_len_2 = pad_packed_sequence(sentences_2, batch_first=True)
         if torch.cuda.is_available():
-            seq_len_1 = seq_len_1.cuda(); seq_len_2 = seq_len_2.cuda()
+            div_seq_len_1 = seq_len_1.cuda(); div_seq_len_2 = seq_len_2.cuda()
 
         # print("model_2")
         # [batch, length, n_dim]
@@ -40,9 +40,9 @@ class ApproxEMD(nn.Module):
         seq_2 = self.emb_layer(seq_2)
 
         # print("model_3")
-        q_1 = torch.cat([torch.max(seq_1, dim=1)[0], torch.min(seq_1, dim=1)[0], torch.sum(seq_1, dim=1) / seq_len_1.view(-1, 1)], dim=-1)
+        q_1 = torch.cat([torch.max(seq_1, dim=1)[0], torch.min(seq_1, dim=1)[0], torch.sum(seq_1, dim=1) / div_seq_len_1.view(-1, 1)], dim=-1)
         q_1 = self.query_act(self.query_layer(q_1))  # [batch, n_hidden]
-        q_2 = torch.cat([torch.max(seq_2, dim=1)[0], torch.min(seq_2, dim=1)[0], torch.sum(seq_2, dim=1) / seq_len_2.view(-1, 1)], dim=-1)
+        q_2 = torch.cat([torch.max(seq_2, dim=1)[0], torch.min(seq_2, dim=1)[0], torch.sum(seq_2, dim=1) / div_seq_len_2.view(-1, 1)], dim=-1)
         q_2 = self.query_act(self.query_layer(q_2))  # [batch, n_hidden]
 
         print("model_4")
