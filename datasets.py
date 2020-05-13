@@ -36,7 +36,6 @@ class DataFactory:
             dist_matrix_dict[dist_type] = dist_matrix
 
         # Ensemble
-        # UB_G and ICT, UB_G and RWMD -> Harnomic, Geometric
         def ensemble_dists(dist_a, dist_b, ensemble_type='harmonic'):
             if ensemble_type == 'harmonic':
                 avg = 2 * dist_a * dist_b / (dist_a + dist_b + 1e-8)
