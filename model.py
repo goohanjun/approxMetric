@@ -28,32 +28,41 @@ class ApproxEMD(nn.Module):
         self.final_layer = nn.Linear(n_hidden, 1)
 
     def forward(self, sentences_1, sentences_2):
+        print("model_1")
         seq_1, seq_len_1 = pad_packed_sequence(sentences_1, batch_first=True)
         seq_2, seq_len_2 = pad_packed_sequence(sentences_2, batch_first=True)
         if torch.cuda.is_available():
             seq_len_1 = seq_len_1.cuda(); seq_len_2 = seq_len_2.cuda()
 
+        print("model_2")
         # [batch, length, n_dim]
         seq_1 = self.emb_layer(seq_1)
         seq_2 = self.emb_layer(seq_2)
 
+        print("model_3")
         q_1 = torch.cat([torch.max(seq_1, dim=1)[0], torch.min(seq_1, dim=1)[0], torch.sum(seq_1, dim=1) / seq_len_1.view(-1, 1)], dim=-1)
         q_1 = self.query_act(self.query_layer(q_1))  # [batch, n_hidden]
         q_2 = torch.cat([torch.max(seq_2, dim=1)[0], torch.min(seq_2, dim=1)[0], torch.sum(seq_2, dim=1) / seq_len_2.view(-1, 1)], dim=-1)
         q_2 = self.query_act(self.query_layer(q_2))  # [batch, n_hidden]
 
+        print("model_4")
         v_1 = self.att_read(q_2, seq_1, seq_len_1)
         v_2 = self.att_read(q_1, seq_2, seq_len_2)
 
+        print("model_5")
         seq_1 = self.mid_layer(seq_1)
         seq_2 = self.mid_layer(seq_2)
 
+        print("model_6")
         h_2 = self.att_comp(v_1, seq_2, seq_len_2)
         h_1 = self.att_comp(v_2, seq_1, seq_len_1)
 
+        print("model_7")
         h_ab = torch.cat([h_1, h_2, h_1 - h_2], dim=-1)  # [bs, 3 * n_h]
         h_ba = torch.cat([h_2, h_1, h_2 - h_1], dim=-1)  # [bs, 3 * n_h]
         h_final = self.out_layer(h_ab) + self.out_layer(h_ba) / 2.
+
+        print("model_8")
         return self.final_layer(h_final).view(-1)  # [batch]
 
 
