@@ -28,6 +28,8 @@ class ApproxEMD(nn.Module):
     def forward(self, sentences_1, sentences_2):
         seq_1, seq_len_1 = pad_packed_sequence(sentences_1, batch_first=True)
         seq_2, seq_len_2 = pad_packed_sequence(sentences_2, batch_first=True)
+        if torch.cuda.is_available():
+            seq_len_1 = seq_len_1.cuda(); seq_len_2 = seq_len_2.cuda()
 
         # [batch, length, n_dim]
         mean_seq, max_seq, min_seq = 0., 0., 0.
