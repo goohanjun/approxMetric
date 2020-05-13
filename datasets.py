@@ -177,7 +177,7 @@ class DataFactory:
         for j in range(self.size):
             for i in range(j):
                 if i in train_set and j in train_set:
-                    if random.random() > 0.05:
+                    if random.random() > 0.10:
                         train_result[(i, j)] = normalized_wmd_dist_matrix[i, j]
                     else:
                         valid_result[(i, j)] = normalized_wmd_dist_matrix[i, j]
@@ -185,7 +185,7 @@ class DataFactory:
                     test_1_result[(i, j)] = normalized_wmd_dist_matrix[i, j]
                 elif i in test_set and j in test_set:
                     test_2_result[(i, j)] = normalized_wmd_dist_matrix[i, j]
-
+        print(f"train / valid / test_1 / test_2 =  {len(train_result)} / {len(valid_result)} / {len(test_1_result)} / {len(test_2_result)}")
         return train_result, valid_result, test_1_result, test_2_result
 
     def get_batch(self, batch_size=10, mode='train'):  # train, test_1, test_2
