@@ -3,7 +3,7 @@ import argparse
 from utils import Map, str2bool
 import random
 import numpy as np
-from model import ApproxEMD, ApproxEMDAttention
+from model import ApproxEMD
 from torch.utils.tensorboard import SummaryWriter
 from datasets import DataFactory
 from tqdm import tqdm
@@ -89,7 +89,6 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', type=int, default=128, help="batch size")
 
     # Model
-    parser.add_argument('--model_name', type=str, default="attEMD", help="model name")
     parser.add_argument('--lr', type=float, default=1e-4, help="learning rate")
     parser.add_argument('--l2_reg', type=float, default=1e-5, help="learning rate")
 
