@@ -36,10 +36,10 @@ def train_single_epoch(args, model, optimizer, data_factory, mode):
 def train(args, model, optimizer, data_factory):
     summary_writer_dict = {}
     algs = {k.split('/')[0] for k in data_factory.default_perf_dict.keys()}
-    algs.add('approx')  # neural network
 
     for alg in algs:
-        summary_writer_dict[alg] = SummaryWriter(f'./logs/{alg}')
+        summary_writer_dict[alg] = SummaryWriter(f'./logs/EMD{args.data_size}_{alg}')
+    summary_writer_dict['approx'] = SummaryWriter(f'./logs/EMD{args.data_size}_{args.model_name}')
 
     for epoch in tqdm(range(300)):
         data_factory.init_performance()
