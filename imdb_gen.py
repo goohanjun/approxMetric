@@ -112,7 +112,7 @@ def load(args):
 
 
 def label_dists(sentences, embedding, results_prev):
-    funcs = [compute_wmd, compute_greenkhorn_0_1, compute_greenkhorn_0_5,  # NIPS'17
+    funcs = [compute_wmd, compute_greenkhorn_0_1, compute_greenkhorn_0_01,  # NIPS'17
              compute_rwmd, compute_omr, compute_act, compute_ict,  # ICML'19
              compute_UB_G,]  # VLDB'13
 #             compute_hmean_rwmd_UB_G, compute_hmean_ict_UB_G]  # TKDE'19

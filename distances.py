@@ -121,8 +121,8 @@ def compute_greenkhorn_0_1(a, b, M):
     return compute_greenkhorn(a, b, M, timeThr=0.1)
 
 
-def compute_greenkhorn_0_5(a, b, M):
-    return compute_greenkhorn(a, b, M, timeThr=0.5)
+def compute_greenkhorn_0_01(a, b, M):
+    return compute_greenkhorn(a, b, M, timeThr=0.01)
 
 
 def compute_greenkhorn(a, b, M, timeThr, reg=1., numItermax=10000, stopThr=1e-9, verbose=False, log=False):
