@@ -80,7 +80,7 @@ def compute_ict(hist_1, hist_2, dists):
         return cost
     return max(asym_ict(p, q, dists_sel), asym_ict(q, p, dists_sel.T))
 
-def compute_act(hist_1, hist_2, dists, k=3):
+def compute_act(hist_1, hist_2, dists_matrix, k=3):
     """
     Compute lower bound of EMD using Approximate ICT
     http://proceedings.mlr.press/v97/atasu19a/atasu19a.pdf
@@ -92,7 +92,7 @@ def compute_act(hist_1, hist_2, dists, k=3):
     """
     idx_1, idx_2 = hist_1.nonzero()[0], hist_2.nonzero()[0]
     p, q = hist_1[idx_1], hist_2[idx_2]
-    dists_sel = dists[np.ix_(idx_1, idx_2)]
+    dists_sel = dists_matrix[np.ix_(idx_1, idx_2)]
 
     def asym_act(p_1, p_2, dists):
         cost = 0.
@@ -245,7 +245,7 @@ def compute_greenkhorn(a, b, M, timeThr, reg=1., numItermax=10000, stopThr=1e-9,
     return dist
 
 
-def compute_UB_G(hist_1, hist_2, dists):
+def compute_UB_G(hist_1, hist_2, dists_matrix):
     """
     :param hist_1 (q):
     :param hist_2 (p):
@@ -253,16 +253,21 @@ def compute_UB_G(hist_1, hist_2, dists):
     :return:
     """
     idx_1, idx_2 = hist_1.nonzero()[0], hist_2.nonzero()[0]
-    dists_sel = dists[np.ix_(idx_1, idx_2)]
+    dists_sel = dists_matrix[np.ix_(idx_1, idx_2)]
 
+    # current_cost
+    current_cost = 0.
+
+    # max_flow calculation
     q_cap, p_cap = hist_1[idx_1], hist_2[idx_2]
     q_flow, p_flow = np.zeros_like(q_cap), np.zeros_like(p_cap)
 
-    flow_cnt, p_flag, cost = 0, True, 0.
+    max_flow_cost = 0.
+    flow_cnt, p_flag = 0, True
     while True:
         feasible_q = np.nonzero((q_cap - q_flow) > 0)[0]
-        if len(feasible_q) == 0: break
         if flow_cnt == 0 and p_flag == False: break
+        if len(feasible_q) == 0: break
         q_i = feasible_q[0]
 
         flow_cnt, p_flag = 0, True
@@ -275,9 +280,9 @@ def compute_UB_G(hist_1, hist_2, dists):
             flow = min(q_cap[q_i] - q_flow[q_i], p_cap[p_j] - p_flow[p_j])
             q_flow[q_i] += flow
             p_flow[p_j] += flow
-            cost += flow * dists[q_i, p_j]
+            max_flow_cost += flow * dists_sel[q_i, p_j]
             flow_cnt += 1
-    return cost
+    return current_cost + max_flow_cost
 
 
 def compute_hmean_rwmd_UB_G(hist_1, hist_2, dists):
