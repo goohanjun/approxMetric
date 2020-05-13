@@ -33,25 +33,27 @@ def train_single_epoch(args, model, optimizer, data_factory, mode):
     return cum_loss / n_batch
 
 
-def train(args, model, optimizer, data_factory, summary_writers):
-    summary_writer_train, summary_writer_test = summary_writers
+def train(args, model, optimizer, data_factory):
+    summary_writer_dict = {}
+    algs = {k.split('/')[0] for k in data_factory.default_perf_dict.keys()}
+    algs.add('approx')  # neural network
+
+    for alg in algs:
+        summary_writer_dict[alg] = SummaryWriter(f'./logs/{alg}')
+
     for epoch in tqdm(range(300)):
         data_factory.init_performance()
 
         for mode in ['train', 'valid', 'test_1', 'test_2']:
             loss = train_single_epoch(args, model, optimizer, data_factory, mode)
-            if mode == 'train': summary_writer_train.add_scalar(f'loss/loss', loss, epoch)
-            elif mode == 'valid': summary_writer_test.add_scalar(f'loss/loss', loss, epoch)
-            elif 'test' in mode: summary_writer_test.add_scalar(f'loss/{mode}_loss', loss, epoch)
+            summary_writer_dict['approx'].add_scalar(f'loss/{mode}', loss, epoch)
 
         perf_dict = data_factory.eval_performance()
         for k, v in perf_dict.items():
             alg, key = k.split('/')
-            if alg == 'approx':
-                summary_writer_train.add_scalar(f'{key}', v, epoch)
-            else:
-                summary_writer_test.add_scalar(f'{key}', v, epoch)
-        print(perf_dict)
+            summary_writer_dict[alg].add_scalar(f'{key}', v, epoch)
+
+        print(f"Epoch @ {epoch}", perf_dict)
 
 
 def main(args):
@@ -72,10 +74,8 @@ def main(args):
     print(model)
 
     optimizer = torch.optim.Adam(model.parameters(), args.lr, weight_decay=args.l2_reg)
-    sw_train = SummaryWriter(f'./logs/{args.model_name}_train')
-    sw_test = SummaryWriter(f'./logs/{args.model_name}_test')
 
-    train(args, model, optimizer, data_factory, (sw_train, sw_test))
+    train(args, model, optimizer, data_factory)
 
 
 if __name__ == '__main__':
@@ -83,7 +83,7 @@ if __name__ == '__main__':
 
     # Dataset
     parser.add_argument('--data_size', type=int, default=30, help="Data sentence size")
-    parser.add_argument('--n_hidden', type=int, default=64, help="hidden dimension size")
+    parser.add_argument('--n_hidden', type=int, default=64, help="hidden dimension size")  # 128?
     parser.add_argument('--batch_size', type=int, default=128, help="batch size")
 
     # Model

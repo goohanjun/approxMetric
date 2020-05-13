@@ -18,6 +18,41 @@ class DataFactory:
         self.embedding = self.load_embedding()
 
         self.init_performance()
+        self.default_perf_dict = self.measure_approx_performance()
+
+    def measure_approx_performance(self):
+        perf_dict = {}
+        dist_types = [k.replace('dist_', '') for k in self.results[(0, 1)].keys() if 'dist' in k]
+
+        dist_matrix_dict = {}
+        for dist_type in dist_types:
+            dist_matrix = np.zeros(shape=(self.size, self.size))
+            for (i, j), v in self.results.items():
+                dist_matrix[j, i] = dist_matrix[i, j] = v[f'dist_{dist_type}']
+
+            dist_perf_dict = self.eval_dist_matrix(dist_name=dist_type, dist_matrix=dist_matrix)
+            perf_dict.update(dist_perf_dict)
+
+            dist_matrix_dict[dist_type] = dist_matrix
+
+        # Ensemble
+        # UB_G and ICT, UB_G and RWMD -> Harnomic, Geometric
+        def ensemble_dists(dist_a, dist_b, ensemble_type='harmonic'):
+            if ensemble_type == 'harmonic':
+                avg = 2 * dist_a * dist_b / (dist_a + dist_b + 1e-8)
+            elif ensemble_type == 'geometric':
+                avg = (dist_a + dist_b) / 2.
+            elif ensemble_type == 'mean':
+                avg = np.sqrt(dist_a * dist_b + 1e-8)
+            return avg
+
+        for lower_type in ['rwmd', 'omr', 'act', 'ict']:
+            for ensemble_type in ['mean', 'geomtric', 'harmonic']:
+                dist_matrix = ensemble_dists(dist_matrix_dict[lower_type], dist_matrix_dict['UB_G'], ensemble_type)
+                dist_perf_dict = self.eval_dist_matrix(dist_name=f"Ens_{ensemble_type}_{lower_type}", dist_matrix=dist_matrix)
+                perf_dict.update(dist_perf_dict)
+
+        return perf_dict
 
     def init_performance(self):
         self.collected_approx_dists = {}
@@ -28,60 +63,58 @@ class DataFactory:
             self.collected_approx_dists[k] = approx_dist[i]
         return
 
-    def eval_performance(self):
-        perf_dict = {}
+    @staticmethod
+    def mse_score(dist_matrix_1, dist_matrix_2, train_size, test_size):
+        area_all = np.sum((dist_matrix_1 - dist_matrix_2) ** 2.)
+        area_a = np.sum((dist_matrix_1[:train_size, :train_size] - dist_matrix_2[:train_size, :train_size]) ** 2.)
+        area_b = np.sum((dist_matrix_1[train_size:, train_size:] - dist_matrix_2[train_size:, train_size:]) ** 2.)
+        area_d = (area_all - area_a - area_b) / 2
 
+        mse_train = area_a / (train_size * train_size)
+        mse_test = (area_d + area_b) / (train_size * test_size + test_size * (test_size + 1) / 2)
+        return mse_train, mse_test
+
+    @ staticmethod
+    def comp_score(dists_1, dists_2):
+        # Compute triplet comparison score
+        size = len(dists_1) * (len(dists_1) - 1) // 2
+        comp_1 = dists_1.reshape(-1, 1) >= dists_1.reshape(1, -1)
+        comp_2 = dists_2.reshape(-1, 1) >= dists_2.reshape(1, -1)
+        score = (np.sum(comp_1 & comp_2) - len(dists_1)) / size
+        return score
+
+    def eval_dist_matrix(self, dist_name, dist_matrix):
         train_size = int(self.size * 0.8)
         test_size = self.size - train_size
-        wmd_dist_matrix, rwmd_dist_matrix = self.wmd_dist_matrix, self.rwmd_dist_matrix
+
+        perf_dict = {}
+
+        mse_train, mse_test = self.mse_score(self.wmd_dist_matrix, dist_matrix, train_size, test_size)
+        perf_dict[f'{dist_name}/mse_train'] = mse_train
+        perf_dict[f'{dist_name}/mse_test'] = mse_test
+
+        comp_scores = []
+        for q_idx in range(self.size):
+            comp_scores.append(self.comp_score(self.wmd_dist_matrix[q_idx, :], dist_matrix[q_idx, :]))
+
+        perf_dict[f'{dist_name}/comp_accuracy_train'] = np.mean(comp_scores[:train_size])
+        perf_dict[f'{dist_name}/comp_accuracy_test'] = np.mean(comp_scores[train_size:])
+
+        return perf_dict
+
+    def eval_performance(self):
+        # load existing approximation results
+        perf_dict = self.default_perf_dict.copy()
 
         approx_dist_matrix = np.zeros(shape=(self.size, self.size))
         for (i, j), v in self.collected_approx_dists.items():
-            approx_dist_matrix[(j, i)] = approx_dist_matrix[(i, j)] = v
+            approx_dist_matrix[j, i] = approx_dist_matrix[i, j] = v
 
-        def mse_score(dist_matrix_1, dist_matrix_2, train_size, test_size):
-            area_all = np.sum((dist_matrix_1 - dist_matrix_2) ** 2.)
-            area_a = np.sum((dist_matrix_1[:train_size, :train_size] - dist_matrix_2[:train_size, :train_size]) ** 2.)
-            area_b = np.sum((dist_matrix_1[train_size:, train_size:] - dist_matrix_2[train_size:, train_size:]) ** 2.)
-            area_d = (area_all - area_a - area_b) / 2
+        # scale up, because true distance was fed with normalization
+        approx_dist_matrix = approx_dist_matrix * self.std + self.mu
 
-            mse_train = area_a / (train_size * train_size)
-            mse_test = (area_d + area_b) / (train_size * test_size + test_size * (test_size + 1) / 2)
-            return mse_train, mse_test
-
-        rwmd_mse_train, rwmd_mse_test = mse_score(wmd_dist_matrix, rwmd_dist_matrix, train_size, test_size)
-        perf_dict['rwmd/mse_train'] = rwmd_mse_train
-        perf_dict['rwmd/mse_test'] = rwmd_mse_test
-
-        approx_mse_train, approx_mse_test = mse_score(wmd_dist_matrix, approx_dist_matrix, train_size, test_size)
-        perf_dict['approx/mse_train'] = approx_mse_train
-        perf_dict['approx/mse_test'] = approx_mse_test
-
-        # Compute score
-        def comp_score(dists_1, dists_2):
-            size = len(dists_1) * (len(dists_1) - 1) // 2
-            comp_1 = dists_1.reshape(-1, 1) >= dists_1.reshape(1, -1)
-            comp_2 = dists_2.reshape(-1, 1) >= dists_2.reshape(1, -1)
-            score = (np.sum(comp_1 & comp_2) - len(dists_1)) / size
-            return score
-
-        wmd_comp, rwmd_comp, approx_comp = [], [], []
-        for q_idx in range(train_size, self.size):
-            # wmd_comp.append(comp_score(wmd_dist_matrix[q_idx, :], wmd_dist_matrix[q_idx, :]))
-            rwmd_comp.append(comp_score(wmd_dist_matrix[q_idx, :], rwmd_dist_matrix[q_idx, :]))
-            approx_comp.append(comp_score(wmd_dist_matrix[q_idx, :], approx_dist_matrix[q_idx, :]))
-
-        perf_dict[f'rwmd/comp_accuracy_test'] = np.mean(rwmd_comp)
-        perf_dict[f'approx/comp_accuracy_test'] = np.mean(approx_comp)
-
-        wmd_comp, rwmd_comp, approx_comp = [], [], []
-        for q_idx in range(train_size):
-            # wmd_comp.append(comp_score(wmd_dist_matrix[q_idx, :], wmd_dist_matrix[q_idx, :]))
-            rwmd_comp.append(comp_score(wmd_dist_matrix[q_idx, :], rwmd_dist_matrix[q_idx, :]))
-            approx_comp.append(comp_score(wmd_dist_matrix[q_idx, :], approx_dist_matrix[q_idx, :]))
-
-        perf_dict[f'rwmd/comp_accuracy_train'] = np.mean(rwmd_comp)
-        perf_dict[f'approx/comp_accuracy_train'] = np.mean(approx_comp)
+        approx_perf = self.eval_dist_matrix(dist_name='approx', dist_matrix=approx_dist_matrix)
+        perf_dict.update(approx_perf)
 
         return perf_dict
 
@@ -131,32 +164,26 @@ class DataFactory:
         train_set = {i for i in range(train_size)}
         test_set = {i for i in range(train_size, self.size)}
 
-        wmd_dist_matrix, rwmd_dist_matrix = np.zeros((self.size, self.size)), np.zeros((self.size, self.size))
+        self.wmd_dist_matrix = np.zeros((self.size, self.size))
         for (i, j), v in results.items():
-            wmd_dist_matrix[j, i] = wmd_dist_matrix[i, j] = v['dist_wmd']
-            rwmd_dist_matrix[j, i] = rwmd_dist_matrix[i, j] = v['dist_rwmd']
+            self.wmd_dist_matrix[j, i] = self.wmd_dist_matrix[i, j] = v['dist_wmd']
 
-        wmd_mu, wmd_std = np.mean(wmd_dist_matrix[:train_size, :train_size]), np.std(wmd_dist_matrix[:train_size, :train_size])
-        rwmd_mu, rwmd_std = np.mean(rwmd_dist_matrix[:train_size, :train_size]), np.std(rwmd_dist_matrix[:train_size, :train_size])
-
-        wmd_dist_matrix = (wmd_dist_matrix - wmd_mu) / wmd_std
-        rwmd_dist_matrix = (rwmd_dist_matrix - rwmd_mu) / rwmd_std
-
-        self.mu, self.std = wmd_mu, wmd_std
-        self.wmd_dist_matrix, self.rwmd_dist_matrix = wmd_dist_matrix, rwmd_dist_matrix
+        self.mu = np.mean(self.wmd_dist_matrix[:train_size, :train_size])
+        self.std = np.std(self.wmd_dist_matrix[:train_size, :train_size])
+        normalized_wmd_dist_matrix = (self.wmd_dist_matrix - self.mu) / self.std
 
         train_result, valid_result, test_1_result, test_2_result = {}, {}, {}, {}
         for j in range(self.size):
             for i in range(j):
                 if i in train_set and j in train_set:
                     if random.random() > 0.2:
-                        train_result[(i, j)] = wmd_dist_matrix[i, j]
+                        train_result[(i, j)] = normalized_wmd_dist_matrix[i, j]
                     else:
-                        valid_result[(i, j)] = wmd_dist_matrix[i, j]
+                        valid_result[(i, j)] = normalized_wmd_dist_matrix[i, j]
                 elif i in train_set and j in test_set:
-                    test_1_result[(i, j)] = wmd_dist_matrix[i, j]
+                    test_1_result[(i, j)] = normalized_wmd_dist_matrix[i, j]
                 elif i in test_set and j in test_set:
-                    test_2_result[(i, j)] = wmd_dist_matrix[i, j]
+                    test_2_result[(i, j)] = normalized_wmd_dist_matrix[i, j]
 
         return train_result, valid_result, test_1_result, test_2_result
 
