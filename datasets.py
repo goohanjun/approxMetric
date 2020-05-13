@@ -91,15 +91,15 @@ class DataFactory:
         perf_dict = {}
 
         mse_train, mse_test = self.mse_score(self.wmd_dist_matrix, dist_matrix, train_size, test_size)
-        perf_dict[f'{dist_name}/mse_train'] = mse_train
-        perf_dict[f'{dist_name}/mse_test'] = mse_test
+        perf_dict[f'{dist_name}/mse/train'] = mse_train
+        perf_dict[f'{dist_name}/mse/test'] = mse_test
 
         comp_scores = []
         for q_idx in range(self.size):
             comp_scores.append(self.comp_score(self.wmd_dist_matrix[q_idx, :], dist_matrix[q_idx, :]))
 
-        perf_dict[f'{dist_name}/comp_accuracy_train'] = np.mean(comp_scores[:train_size])
-        perf_dict[f'{dist_name}/comp_accuracy_test'] = np.mean(comp_scores[train_size:])
+        perf_dict[f'{dist_name}/comp_accuracy/train'] = np.mean(comp_scores[:train_size])
+        perf_dict[f'{dist_name}/comp_accuracy/test'] = np.mean(comp_scores[train_size:])
 
         return perf_dict
 

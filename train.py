@@ -2,8 +2,7 @@ import torch
 import argparse
 from utils import Map, str2bool
 import random
-import numpy as np
-from model import ApproxEMD
+from model import *
 from torch.utils.tensorboard import SummaryWriter
 from datasets import DataFactory
 from tqdm import tqdm
@@ -12,7 +11,7 @@ import os
 
 def train_single_epoch(args, model, optimizer, data_factory, mode):
     loss_func = torch.nn.MSELoss()
-    n_batch, cum_loss = 1, 0.
+    n_batch, cum_loss = 0, 0.
     for b in data_factory.get_batch(batch_size=args.batch_size, mode=mode):
         n_batch += 1
         keys, sentences_1, sentences_2, dists = b
@@ -31,7 +30,7 @@ def train_single_epoch(args, model, optimizer, data_factory, mode):
         if mode == 'train':
             loss.backward()
             optimizer.step()
-    return cum_loss / n_batch
+    return cum_loss / max(n_batch, 1)
 
 
 def train(args, model, optimizer, data_factory):
@@ -52,7 +51,7 @@ def train(args, model, optimizer, data_factory):
 
         perf_dict = data_factory.eval_performance()
         for k, v in perf_dict.items():
-            alg, key = k.split('/')
+            alg, key = k.split('/', 1)  # split with first /
             if alg in summary_writer_dict:
                 summary_writer_dict[alg].add_scalar(f'{key}', v, epoch)
 
@@ -67,8 +66,14 @@ def main(args):
     data_factory = DataFactory(size=args.data_size)
 
     # Load model
-    model = ApproxEMD(n_hidden=args.n_hidden)
-    args.model_name = f"{model.name}_{args.data_size}_nh{args.n_hidden}_reg{args.l2_reg}"
+    if args.model == 'att':
+        model = ApproxEMDAttention(n_hidden=args.n_hidden)
+    elif args.model == 'att2':
+        model = ApproxEMDAttentionDouble(n_hidden=args.n_hidden)
+    elif args.model == 'sym':
+        model = ApproxEMD(n_hidden=args.n_hidden)
+
+    args.model_name = f"{model.name}_nh{args.n_hidden}_reg{args.l2_reg}"
 
     if torch.cuda.is_available():
         model = model.cuda()
@@ -89,6 +94,7 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', type=int, default=128, help="batch size")
 
     # Model
+    parser.add_argument('--model', type=str, default="att", help="Model Name")
     parser.add_argument('--lr', type=float, default=1e-4, help="learning rate")
     parser.add_argument('--l2_reg', type=float, default=1e-5, help="learning rate")
 

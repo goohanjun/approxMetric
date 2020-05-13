@@ -66,15 +66,57 @@ class ApproxEMD(nn.Module):
         return self.final_layer(h_final).view(-1)  # [batch]
 
 
-class ApproxEMDAttention_GRU(nn.Module):
+class ApproxEMDAttentionDouble(nn.Module):
     def __init__(self, n_hidden):
         super().__init__()
-        self.name = "Attention_GRU"
+        self.name = "AttGRU_Double"
+        self.n_hidden = n_hidden
+        self.gru_read = nn.GRU(input_size=300, hidden_size=n_hidden, num_layers=1, bidirectional=True, batch_first=True)
+        self.gru_comp = nn.GRU(input_size=n_hidden * 2, hidden_size=n_hidden, num_layers=1, bidirectional=True, batch_first=True)
+
+        self.att_read = BatchScaledDotProductAttention(n_in=n_hidden*2, n_out=n_hidden*2)
+        self.att_comp = BatchScaledDotProductAttention(n_in=n_hidden*2, n_out=n_hidden)
+
+        self.out_layer = MLP(input_hidden=n_hidden*3, n_hiddens=[n_hidden, n_hidden])
+        self.out_act = nn.ReLU()
+        self.final_layer = nn.Linear(n_hidden, 1)
+
+    def forward(self, sentences_1, sentences_2):
+        seq_1, hidden_1 = self.gru_read(sentences_1)
+        hidden_1 = torch.transpose(hidden_1, 0, 1)  # [batch, 2, n_h]
+        bs = hidden_1.size()[0]
+        hidden_1 = hidden_1.reshape(bs, -1)
+        output_1, seq_len_1 = pad_packed_sequence(seq_1, batch_first=True)
+
+        seq_2, hidden_2 = self.gru_read(sentences_2)
+        hidden_2 = torch.transpose(hidden_2, 0, 1).reshape(bs, -1)  # [batch, 2, n_h]
+        output_2, seq_len_2 = pad_packed_sequence(seq_2, batch_first=True)
+
+        att_read_1 = self.att_read(hidden_2, output_1, seq_len_1)
+        att_read_2 = self.att_read(hidden_1, output_2, seq_len_2)
+
+        seq_1, hidden_1 = self.gru_comp(seq_1)
+        seq_2, hidden_2 = self.gru_comp(seq_2)
+
+        seq_1, seq_len_2 = pad_packed_sequence(seq_1, batch_first=True)
+        seq_2, seq_len_2 = pad_packed_sequence(seq_2, batch_first=True)
+
+        att_1 = self.att_comp(att_read_2, seq_1, seq_len_1)
+        att_2 = self.att_comp(att_read_1, seq_2, seq_len_2)
+
+        h = torch.cat([att_1, att_2, att_1 - att_2], dim=-1)  # [bs, 6 * n_h]
+        h_final = self.out_act(self.out_layer(h))  # [batch, 1]
+
+        return self.final_layer(h_final).view(-1)  # [batch]
+
+
+class ApproxEMDAttention(nn.Module):
+    def __init__(self, n_hidden):
+        super().__init__()
+        self.name = "AttGRU"
         self.n_hidden = n_hidden
         self.gru = nn.GRU(input_size=300, hidden_size=n_hidden, num_layers=1, bidirectional=True, batch_first=True)
-
         self.att = BatchScaledDotProductAttention(n_in=n_hidden*2, n_out=n_hidden)
-
         self.out_layer = MLP(input_hidden=n_hidden * 3, n_hiddens=[n_hidden, n_hidden])
         self.out_act = nn.ReLU()
         self.final_layer = nn.Linear(n_hidden, 1)
