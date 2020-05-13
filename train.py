@@ -7,6 +7,7 @@ from model import ApproxEMD, ApproxEMDAttention
 from torch.utils.tensorboard import SummaryWriter
 from datasets import DataFactory
 from tqdm import tqdm
+import os
 
 
 def train_single_epoch(args, model, optimizer, data_factory, mode):
@@ -38,7 +39,8 @@ def train(args, model, optimizer, data_factory):
     algs = {k.split('/')[0] for k in data_factory.default_perf_dict.keys()}
 
     for alg in algs:
-        summary_writer_dict[alg] = SummaryWriter(f'./logs/EMD{args.data_size}_{alg}')
+        if not os.path.isdir(f'./logs/EMD{args.data_size}_{alg}'):
+            summary_writer_dict[alg] = SummaryWriter(f'./logs/EMD{args.data_size}_{alg}')
     summary_writer_dict['approx'] = SummaryWriter(f'./logs/EMD{args.data_size}_{args.model_name}')
 
     for epoch in tqdm(range(300)):
@@ -51,7 +53,8 @@ def train(args, model, optimizer, data_factory):
         perf_dict = data_factory.eval_performance()
         for k, v in perf_dict.items():
             alg, key = k.split('/')
-            summary_writer_dict[alg].add_scalar(f'{key}', v, epoch)
+            if alg in summary_writer_dict:
+                summary_writer_dict[alg].add_scalar(f'{key}', v, epoch)
 
         print(f"Epoch @ {epoch}", perf_dict)
 
@@ -64,10 +67,9 @@ def main(args):
     data_factory = DataFactory(size=args.data_size)
 
     # Load model
-    if 'att' in args.model_name:
-        model = ApproxEMDAttention(n_hidden=args.n_hidden)
-    else:
-        model = ApproxEMD(n_hidden=args.n_hidden)
+    model = ApproxEMD(n_hidden=args.n_hidden)
+    args.model_name = f"{model.name}_{args.data_size}_nh{args.n_hidden}_reg{args.l2_reg}"
+
     if torch.cuda.is_available():
         model = model.cuda()
 
@@ -96,7 +98,6 @@ if __name__ == '__main__':
                         const=True, default=False, help="True if you wanna print messages")
 
     args = Map(vars(parser.parse_args()))
-    args.model_name = f"{args.model_name}_{args.data_size}_nh{args.n_hidden}_reg{args.l2_reg}"
     print(args)
 
     main(args)

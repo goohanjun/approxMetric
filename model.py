@@ -10,6 +10,85 @@ from torch.autograd import Variable
 class ApproxEMD(nn.Module):
     def __init__(self, n_hidden):
         super().__init__()
+        self.name = "SymAttention"
+        self.n_hidden = n_hidden
+
+        self.query_layer = MLP(input_hidden=n_hidden * 3, n_hiddens=[n_hidden, n_hidden])
+        self.query_act = nn.ReLU()
+
+        self.att_read = BatchScaledDotProductAttention(n_in=n_hidden, n_out=n_hidden)
+        self.att_comp = BatchScaledDotProductAttention(n_in=n_hidden, n_out=n_hidden)
+
+        self.mid_layer = MLP(input_hidden=n_hidden, n_hiddens=[n_hidden, n_hidden], final_act=True)
+
+        self.out_layer = MLP(input_hidden=n_hidden * 3, n_hiddens=[n_hidden, n_hidden], final_act=True)
+        self.out_act = nn.ReLU()
+        self.final_layer = nn.Linear(n_hidden, 1)
+
+    def forward(self, sentences_1, sentences_2):
+        seq_1, seq_len_1 = pad_packed_sequence(sentences_1, batch_first=True)
+        seq_2, seq_len_2 = pad_packed_sequence(sentences_2, batch_first=True)
+
+        # [batch, length, n_dim]
+        mean_seq, max_seq, min_seq = 0., 0., 0.
+        q_1 = torch.cat([torch.max(seq_1, dim=1), torch.min(seq_1, dim=1), torch.sum(seq_1, dim=1) / seq_len_1.view(-1, 1)], dim=-1)
+        q_1 = self.query_act(self.query_layer(q_1))  # [batch, n_hidden]
+        q_2 = torch.cat([torch.max(seq_2, dim=1), torch.min(seq_2, dim=1), torch.sum(seq_2, dim=1) / seq_len_2.view(-1, 1)], dim=-1)
+        q_2 = self.query_act(self.query_layer(q_2))  # [batch, n_hidden]
+
+        v_1 = self.att_read(q_2, seq_1, seq_len_1)
+        v_2 = self.att_read(q_1, seq_2, seq_len_2)
+
+        seq_1 = self.mid_layer(seq_1)
+        seq_2 = self.mid_layer(seq_2)
+
+        h_2 = self.att_comp(v_1, seq_2, seq_len_2)
+        h_1 = self.att_comp(v_2, seq_1, seq_len_1)
+
+        h_ab = torch.cat([h_1, h_2, h_1 - h_2], dim=-1)  # [bs, 3 * n_h]
+        h_ba = torch.cat([h_2, h_1, h_2 - h_1], dim=-1)  # [bs, 3 * n_h]
+        h_final = self.out_layer(h_ab) + self.out_layer(h_ba) / 2.
+        return self.final_layer(h_final).view(-1)  # [batch]
+
+
+class ApproxEMDAttention_GRU(nn.Module):
+    def __init__(self, n_hidden):
+        super().__init__()
+        self.name = "Attention_GRU"
+        self.n_hidden = n_hidden
+        self.gru = nn.GRU(input_size=300, hidden_size=n_hidden, num_layers=1, bidirectional=True, batch_first=True)
+
+        self.att = BatchScaledDotProductAttention(n_in=n_hidden*2, n_out=n_hidden)
+
+        self.out_layer = MLP(input_hidden=n_hidden * 3, n_hiddens=[n_hidden, n_hidden])
+        self.out_act = nn.ReLU()
+        self.final_layer = nn.Linear(n_hidden, 1)
+
+    def forward(self, sentences_1, sentences_2):
+        seq_1, hidden_1 = self.gru(sentences_1)
+        hidden_1 = torch.transpose(hidden_1, 0, 1)  # [batch, 2, n_h]
+        bs = hidden_1.size()[0]
+        hidden_1 = hidden_1.reshape(bs, -1)
+        output_1, output_lengths_1 = pad_packed_sequence(seq_1, batch_first=True)
+
+        seq_2, hidden_2 = self.gru(sentences_2)
+        hidden_2 = torch.transpose(hidden_2, 0, 1)  # [batch, 2, n_h]
+        hidden_2 = hidden_2.reshape(bs, -1)
+        output_2, output_lengths_2 = pad_packed_sequence(seq_2, batch_first=True)
+
+        att_1 = self.att(hidden_2, output_1, output_lengths_1)
+        att_2 = self.att(hidden_1, output_2, output_lengths_2)
+
+        h = torch.cat([att_1, att_2, att_1 - att_2], dim=-1)  # [bs, 6 * n_h]
+        h_final = self.out_act(self.out_layer(h))  # [batch, 1]
+
+        return self.final_layer(h_final).view(-1)  # [batch]
+
+
+class ApproxEMDBaseline(nn.Module):
+    def __init__(self, n_hidden):
+        self.name = "Baseline"
+        super().__init__()
         self.n_hidden = n_hidden
         self.gru = nn.GRU(input_size=300, hidden_size=n_hidden, num_layers=1, bidirectional=True, batch_first=True)
 
@@ -36,53 +115,19 @@ class ApproxEMD(nn.Module):
         return self.final_layer(h_final).view(-1)  # [batch]
 
 
-class ApproxEMDAttention(nn.Module):
-    def __init__(self, n_hidden):
-        super().__init__()
-        self.n_hidden = n_hidden
-        self.gru = nn.GRU(input_size=300, hidden_size=n_hidden, num_layers=1, bidirectional=True, batch_first=True)
-
-        self.att = BatchScaledDotProductAttention(n_hidden)
-
-        self.out_layer = MLP(input_hidden=n_hidden * 3, n_hiddens=[n_hidden, n_hidden])
-        self.out_act = nn.ReLU()
-        self.final_layer = nn.Linear(n_hidden, 1)
-        self.final_act = nn.ReLU()
-
-    def forward(self, sentences_1, sentences_2):
-        seq_1, hidden_1 = self.gru(sentences_1)
-        hidden_1 = torch.transpose(hidden_1, 0, 1)  # [batch, 2, n_h]
-        bs = hidden_1.size()[0]
-        hidden_1 = hidden_1.reshape(bs, -1)
-        output_1, output_lengths_1 = pad_packed_sequence(seq_1, batch_first=True)
-
-        seq_2, hidden_2 = self.gru(sentences_2)
-        hidden_2 = torch.transpose(hidden_2, 0, 1)  # [batch, 2, n_h]
-        hidden_2 = hidden_2.reshape(bs, -1)
-        output_2, output_lengths_2 = pad_packed_sequence(seq_2, batch_first=True)
-
-        att_1 = self.att(hidden_2, output_1, output_lengths_1)
-        att_2 = self.att(hidden_1, output_2, output_lengths_2)
-
-        h = torch.cat([att_1, att_2, att_1 - att_2], dim=-1)  # [bs, 6 * n_h]
-        h_final = self.out_act(self.out_layer(h))  # [batch, 1]
-
-        return self.final_layer(h_final).view(-1)  # [batch]
-
-
 # Batch attention
 class BatchScaledDotProductAttention(nn.Module):
-    def __init__(self, n_hidden):
+    def __init__(self, n_in, n_out):
         '''scaled-dot-product-attention
             parameters:
                 d_model: A scalar. attention size
         '''
         super(BatchScaledDotProductAttention, self).__init__()
-        self.temper = np.power(n_hidden, 0.5)
-        self.q_layer = nn.Linear(n_hidden * 2, n_hidden)
-        self.k_layer = nn.Linear(n_hidden * 2, n_hidden)
-        self.v_layer = nn.Linear(n_hidden * 2, n_hidden)
-        self.out_linear = nn.Linear(n_hidden, n_hidden)
+        self.temper = np.power(n_in, 0.5)
+        self.q_layer = nn.Linear(n_in, n_out)
+        self.k_layer = nn.Linear(n_in, n_out)
+        self.v_layer = nn.Linear(n_in, n_out)
+        self.out_linear = nn.Linear(n_out, n_out)
 
     def forward(self, h, seq, seq_length):
         ''' forward step
@@ -95,8 +140,6 @@ class BatchScaledDotProductAttention(nn.Module):
         h = self.q_layer(h).unsqueeze(-1)  # [ batch * h * 1 ]
         k = self.k_layer(seq)  # [ batch, length, h ]
         v = self.v_layer(seq)  # [ batch, length, h ]
-        # print("h", h.size())
-        # print("k", k.size())
         scores = torch.matmul(k, h)  # [batch, length, 1]
         # print("scores", scores.size())
         scores = scores.squeeze(2)  # [ batch, length ]
@@ -131,7 +174,7 @@ class BatchScaledDotProductAttention(nn.Module):
 
 
 class MLP(nn.Module):
-    def __init__(self, input_hidden, n_hiddens=[64, 64]):
+    def __init__(self, input_hidden, n_hiddens=[64, 64], final_act=False):
         super().__init__()
         self.n_hiddens = n_hiddens.copy()
         self.layers = nn.ModuleList()
@@ -142,6 +185,8 @@ class MLP(nn.Module):
             if i < len(self.n_hiddens) - 1:
                 self.act_layers.append(nn.ReLU())
             h_in = h_out
+        if final_act:
+            self.act_layers.append(nn.ReLU())
         return
 
     def forward(self, x):
@@ -151,4 +196,6 @@ class MLP(nn.Module):
             h = self.layers[i](h)
             if i < len(self.layers) - 1:
                 h = self.act_layers[i](h)
+        if self.final_act:
+            h = self.act_layers[-1](h)
         return h

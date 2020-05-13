@@ -177,7 +177,7 @@ class DataFactory:
         for j in range(self.size):
             for i in range(j):
                 if i in train_set and j in train_set:
-                    if random.random() > 0.2:
+                    if random.random() > 0.05:
                         train_result[(i, j)] = normalized_wmd_dist_matrix[i, j]
                     else:
                         valid_result[(i, j)] = normalized_wmd_dist_matrix[i, j]
