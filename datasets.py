@@ -30,7 +30,7 @@ class DataFactory:
             for (i, j), v in self.results.items():
                 dist_matrix[j, i] = dist_matrix[i, j] = v[f'dist_{dist_type}']
 
-            dist_perf_dict = self.eval_dist_matrix(dist_name=dist_type, dist_matrix=dist_matrix)
+            dist_perf_dict = self.eval_dist_matrix(dist_name=f"SOL_{dist_type}", dist_matrix=dist_matrix)
             perf_dict.update(dist_perf_dict)
 
             dist_matrix_dict[dist_type] = dist_matrix
@@ -50,7 +50,7 @@ class DataFactory:
         for lower_type in ['rwmd', 'omr', 'act', 'ict']:
             for ensemble_type in ['mean', 'geometric', 'harmonic']:
                 dist_matrix = ensemble_dists(dist_matrix_dict[lower_type], dist_matrix_dict['UB_G'], ensemble_type)
-                dist_perf_dict = self.eval_dist_matrix(dist_name=f"Ens_{ensemble_type}_{lower_type}", dist_matrix=dist_matrix)
+                dist_perf_dict = self.eval_dist_matrix(dist_name=f"ENS_{ensemble_type}_{lower_type}", dist_matrix=dist_matrix)
                 perf_dict.update(dist_perf_dict)
 
         return perf_dict
