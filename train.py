@@ -87,7 +87,7 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', type=int, default=128, help="batch size")
 
     # Model
-    parser.add_argument('--model_name', type=str, default="EMD", help="model name")
+    parser.add_argument('--model_name', type=str, default="attEMD", help="model name")
     parser.add_argument('--lr', type=float, default=1e-4, help="learning rate")
     parser.add_argument('--l2_reg', type=float, default=1e-5, help="learning rate")
 
