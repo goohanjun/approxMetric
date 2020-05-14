@@ -9,8 +9,24 @@ from tqdm import tqdm
 import os
 
 
+def loss_func(args, label, predicted):
+    x = predicted + 1e-8
+    y = label + 1e-8
+    if args.loss == "mse":
+        loss_func = torch.nn.MSELoss()
+        return loss_func(x, y)
+
+    elif args.loss == "mlse":
+        loss_func = torch.nn.MSELoss()
+        return loss_func(torch.log(x), torch.log(y))
+
+    elif args.loss == "logsumexp":
+        concat = torch.stack([x / y, y / x], dim=1)  # [16,2]
+        logsumexp = torch.logsumexp(concat, dim=1)
+        return logsumexp.mean()
+
+
 def train_single_epoch(args, model, optimizer, data_factory, mode):
-    loss_func = torch.nn.MSELoss()
     n_batch, cum_loss = 0, 0.
     for b in data_factory.get_batch(batch_size=args.batch_size, mode=mode):
         n_batch += 1
@@ -24,7 +40,7 @@ def train_single_epoch(args, model, optimizer, data_factory, mode):
         # for evaluation
         data_factory.collect(keys, approx_dists)
 
-        loss = loss_func(dists, approx_dists)
+        loss = loss_func(args, dists, approx_dists)
         cum_loss += loss.item()
 
         if mode == 'train':
@@ -63,17 +79,20 @@ def main(args):
     torch.manual_seed(0);random.seed(0);np.random.seed(0)
 
     # Load dataset
-    data_factory = DataFactory(size=args.data_size)
+    data_factory = DataFactory(size=args.data_size, ratio=args.ratio)
 
     # Load model
     if args.model == 'att':
-        model = ApproxEMDAttention(n_hidden=args.n_hidden)
+        model = ApproxEMDAttention(args)
     elif args.model == 'att2':
-        model = ApproxEMDAttentionDouble(n_hidden=args.n_hidden)
+        model = ApproxEMDAttentionDouble(args)
     elif args.model == 'sym':
-        model = ApproxEMD(n_hidden=args.n_hidden)
+        model = ApproxEMD(args)
 
-    args.model_name = f"{model.name}_nh{args.n_hidden}_reg{args.l2_reg}"
+    args.model_name = f"{model.name}_nh{args.n_hidden}_reg{args.l2_reg}_loss{args.loss}"
+
+    if args.ratio:
+        args.model_name = "ENS_" + args.model_name
 
     if torch.cuda.is_available():
         model = model.cuda()
@@ -92,9 +111,12 @@ if __name__ == '__main__':
     parser.add_argument('--data_size', type=int, default=30, help="Data sentence size")
     parser.add_argument('--n_hidden', type=int, default=64, help="hidden dimension size")  # 128?
     parser.add_argument('--batch_size', type=int, default=128, help="batch size")
+    parser.add_argument('--ratio', type=str2bool, nargs='?',
+                        const=True, default=False, help="True if model learns ratio [0,1] between lower/upper bounds")
 
     # Model
     parser.add_argument('--model', type=str, default="att", help="Model Name")
+    parser.add_argument('--loss', type=str, default="mse", help="Loss function type [mse, mlse, logsumexp]")
     parser.add_argument('--lr', type=float, default=1e-4, help="learning rate")
     parser.add_argument('--l2_reg', type=float, default=1e-5, help="learning rate")
 

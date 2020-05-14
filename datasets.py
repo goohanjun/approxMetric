@@ -11,8 +11,9 @@ import numpy as np
 
 
 class DataFactory:
-    def __init__(self, size=500):
+    def __init__(self, size=500, ratio=False):
         self.size = size
+        self.ratio = ratio
         self.train, self.valid, self.test_1, self.test_2 = self.load()
 
         self.embedding = self.load_embedding()
@@ -112,7 +113,11 @@ class DataFactory:
             approx_dist_matrix[j, i] = approx_dist_matrix[i, j] = v
 
         # scale up, because true distance was fed with normalization
-        approx_dist_matrix = approx_dist_matrix * self.std + self.mu
+        if self.ratio:
+            # r = (self.wmd_dist_matrix - self.lb_matrix) / (self.ub_matrix - self.lb_matrix + 1e-6)  [0, 1]
+            approx_dist_matrix = approx_dist_matrix * (self.ub_matrix - self.lb_matrix + 1e-6) + self.lb_matrix
+        else:
+            approx_dist_matrix = approx_dist_matrix * self.std + self.mu
 
         approx_perf = self.eval_dist_matrix(dist_name='approx', dist_matrix=approx_dist_matrix)
         perf_dict.update(approx_perf)
@@ -166,25 +171,37 @@ class DataFactory:
         test_set = {i for i in range(train_size, self.size)}
 
         self.wmd_dist_matrix = np.zeros((self.size, self.size))
+        self.lb_matrix, self.ub_matrix = np.zeros((self.size, self.size)), np.zeros((self.size, self.size))
         for (i, j), v in results.items():
             self.wmd_dist_matrix[j, i] = self.wmd_dist_matrix[i, j] = v['dist_wmd']
+            self.lb_matrix[j, i] = self.lb_matrix[i, j] = v['dist_rwmd']
+            self.ub_matrix[j, i] = self.ub_matrix[i, j] = v['dist_UB_G']
 
         self.mu = np.mean(self.wmd_dist_matrix[:train_size, :train_size])
         self.std = np.std(self.wmd_dist_matrix[:train_size, :train_size])
+
         normalized_wmd_dist_matrix = (self.wmd_dist_matrix - self.mu) / self.std
+
+        r_dist_matrix = (self.wmd_dist_matrix - self.lb_matrix) / (self.ub_matrix - self.lb_matrix + 1e-6)
+
+        if self.ratio:
+            ans_matrix = r_dist_matrix
+        else:
+            ans_matrix = normalized_wmd_dist_matrix
 
         train_result, valid_result, test_1_result, test_2_result = {}, {}, {}, {}
         for j in range(self.size):
             for i in range(j):
                 if i in train_set and j in train_set:
                     if random.random() > 0.10:
-                        train_result[(i, j)] = normalized_wmd_dist_matrix[i, j]
+                        train_result[(i, j)] = ans_matrix[i, j]
                     else:
-                        valid_result[(i, j)] = normalized_wmd_dist_matrix[i, j]
+                        valid_result[(i, j)] = ans_matrix[i, j]
                 elif i in train_set and j in test_set:
-                    test_1_result[(i, j)] = normalized_wmd_dist_matrix[i, j]
+                    test_1_result[(i, j)] = ans_matrix[i, j]
                 elif i in test_set and j in test_set:
-                    test_2_result[(i, j)] = normalized_wmd_dist_matrix[i, j]
+                    test_2_result[(i, j)] = ans_matrix[i, j]
+
         print(f"train / valid / test_1 / test_2 =  {len(train_result)} / {len(valid_result)} / {len(test_1_result)} / {len(test_2_result)}")
         return train_result, valid_result, test_1_result, test_2_result
 

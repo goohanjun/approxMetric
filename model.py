@@ -8,10 +8,11 @@ from torch.autograd import Variable
 
 
 class ApproxEMD(nn.Module):
-    def __init__(self, n_hidden):
+    def __init__(self, args):
         super().__init__()
         self.name = "SymAtt_Double"
-        self.n_hidden = n_hidden
+        self.ratio = args.ratio
+        self.n_hidden = n_hidden = args.n_hidden
 
         self.emb_layer = MLP(input_hidden=300, n_hiddens=[n_hidden])
 
@@ -26,6 +27,7 @@ class ApproxEMD(nn.Module):
         self.out_layer = MLP(input_hidden=n_hidden * 3, n_hiddens=[n_hidden, n_hidden], final_act=True)
         self.out_act = nn.ReLU()
         self.final_layer = nn.Linear(n_hidden, 1)
+        self.ratio_act = nn.Sigmoid()
 
     def forward(self, sentences_1, sentences_2):
         seq_1, seq_len_1 = pad_packed_sequence(sentences_1, batch_first=True)
@@ -54,15 +56,20 @@ class ApproxEMD(nn.Module):
         h_ab = torch.cat([h_1, h_2, h_1 - h_2], dim=-1)  # [bs, 3 * n_h]
         h_ba = torch.cat([h_2, h_1, h_2 - h_1], dim=-1)  # [bs, 3 * n_h]
         h_final = self.out_layer(h_ab) + self.out_layer(h_ba) / 2.
+        d = self.final_layer(h_final).view(-1)  # [batch]
 
-        return self.final_layer(h_final).view(-1)  # [batch]
+        if self.ratio:
+            d = self.ratio_act(d)
+
+        return d
 
 
 class ApproxEMDAttentionDouble(nn.Module):
-    def __init__(self, n_hidden):
+    def __init__(self, args):
         super().__init__()
         self.name = "AttGRU_Double"
-        self.n_hidden = n_hidden
+        self.ratio = args.ratio
+        self.n_hidden = n_hidden = args.n_hidden
         self.gru_read = nn.GRU(input_size=300, hidden_size=n_hidden, num_layers=1, bidirectional=True, batch_first=True)
         self.gru_comp = nn.GRU(input_size=n_hidden * 2, hidden_size=n_hidden, num_layers=1, bidirectional=True, batch_first=True)
 
@@ -72,6 +79,7 @@ class ApproxEMDAttentionDouble(nn.Module):
         self.out_layer = MLP(input_hidden=n_hidden*3, n_hiddens=[n_hidden, n_hidden])
         self.out_act = nn.ReLU()
         self.final_layer = nn.Linear(n_hidden, 1)
+        self.ratio_act = nn.Sigmoid()
 
     def forward(self, sentences_1, sentences_2):
         seq_1, hidden_1 = self.gru_read(sentences_1)
@@ -99,19 +107,26 @@ class ApproxEMDAttentionDouble(nn.Module):
         h = torch.cat([att_1, att_2, att_1 - att_2], dim=-1)  # [bs, 6 * n_h]
         h_final = self.out_act(self.out_layer(h))  # [batch, 1]
 
-        return self.final_layer(h_final).view(-1)  # [batch]
+        d = self.final_layer(h_final).view(-1)  # [batch]
+
+        if self.ratio:
+            d = self.ratio_act(d)
+
+        return d
 
 
 class ApproxEMDAttention(nn.Module):
-    def __init__(self, n_hidden):
+    def __init__(self, args):
         super().__init__()
         self.name = "AttGRU"
-        self.n_hidden = n_hidden
+        self.ratio = args.ratio
+        self.n_hidden = n_hidden = args.n_hidden
         self.gru = nn.GRU(input_size=300, hidden_size=n_hidden, num_layers=1, bidirectional=True, batch_first=True)
         self.att = BatchScaledDotProductAttention(n_in=n_hidden*2, n_out=n_hidden)
         self.out_layer = MLP(input_hidden=n_hidden * 3, n_hiddens=[n_hidden, n_hidden])
         self.out_act = nn.ReLU()
         self.final_layer = nn.Linear(n_hidden, 1)
+        self.ratio_act = nn.Sigmoid()
 
     def forward(self, sentences_1, sentences_2):
         seq_1, hidden_1 = self.gru(sentences_1)
@@ -131,14 +146,20 @@ class ApproxEMDAttention(nn.Module):
         h = torch.cat([att_1, att_2, att_1 - att_2], dim=-1)  # [bs, 6 * n_h]
         h_final = self.out_act(self.out_layer(h))  # [batch, 1]
 
-        return self.final_layer(h_final).view(-1)  # [batch]
+        d = self.final_layer(h_final).view(-1)  # [batch]
+
+        if self.ratio:
+            d = self.ratio_act(d)
+
+        return d
 
 
 class ApproxEMDBaseline(nn.Module):
-    def __init__(self, n_hidden):
+    def __init__(self, args):
         self.name = "Baseline"
         super().__init__()
-        self.n_hidden = n_hidden
+        self.ratio = args.ratio
+        self.n_hidden = n_hidden = args.n_hidden
         self.gru = nn.GRU(input_size=300, hidden_size=n_hidden, num_layers=1, bidirectional=True, batch_first=True)
 
         self.out_layer = MLP(input_hidden=n_hidden * 6, n_hiddens=[n_hidden, n_hidden])
@@ -161,7 +182,10 @@ class ApproxEMDBaseline(nn.Module):
         h = torch.cat([hidden_1, hidden_2, hidden_1 - hidden_2], dim=-1)  # [bs, 6 * n_h]
         h_final = self.out_act(self.out_layer(h))  # [batch, 1]
 
-        return self.final_layer(h_final).view(-1)  # [batch]
+        d = self.final_layer(h_final).view(-1)  # [batch]
+        if self.ratio:
+            d = self.ratio_act(d)
+        return d
 
 
 # Batch attention
