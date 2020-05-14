@@ -79,7 +79,7 @@ def main(args):
     torch.manual_seed(0);random.seed(0);np.random.seed(0)
 
     # Load dataset
-    data_factory = DataFactory(size=args.data_size, ratio=args.ratio)
+    data_factory = DataFactory(size=args.data_size, ratio=args.ratio, lb=args.lb)
 
     # Load model
     if args.model == 'att':
@@ -89,10 +89,10 @@ def main(args):
     elif args.model == 'sym':
         model = ApproxEMD(args)
 
-    args.model_name = f"{model.name}_nh{args.n_hidden}_reg{args.l2_reg}_loss{args.loss}"
+    args.model_name = f"{model.name}_nh{args.n_hidden}_reg{args.l2_reg}_loss_{args.loss}"
 
     if args.ratio:
-        args.model_name = "ENS_" + args.model_name
+        args.model_name = "ENS_" + args.model_name + f"_LB_{args.lb}"
     else:
         args.model_name = "SOL_" + args.model_name
 
@@ -113,12 +113,13 @@ if __name__ == '__main__':
     parser.add_argument('--data_size', type=int, default=30, help="Data sentence size")
     parser.add_argument('--n_hidden', type=int, default=64, help="hidden dimension size")  # 128?
     parser.add_argument('--batch_size', type=int, default=128, help="batch size")
+    parser.add_argument('--lb', type=str, default="rwmd", help="Lower bound distance name [rwmd, act, ict, omr]")
     parser.add_argument('--ratio', type=str2bool, nargs='?',
                         const=True, default=False, help="True if model learns ratio [0,1] between lower/upper bounds")
 
     # Model
     parser.add_argument('--model', type=str, default="att", help="Model Name")
-    parser.add_argument('--loss', type=str, default="mse", help="Loss function type [mse, mlse, logsumexp]")
+    parser.add_argument('--loss', type=str, default="mlse", help="Loss function type [mse, mlse, logsumexp]")
     parser.add_argument('--lr', type=float, default=1e-4, help="learning rate")
     parser.add_argument('--l2_reg', type=float, default=1e-5, help="learning rate")
 

@@ -11,9 +11,10 @@ import numpy as np
 
 
 class DataFactory:
-    def __init__(self, size=500, ratio=False):
+    def __init__(self, size=500, ratio=False, lb='rwmd'):
         self.size = size
         self.ratio = ratio
+        self.lb = lb
         self.train, self.valid, self.test_1, self.test_2 = self.load()
 
         self.embedding = self.load_embedding()
@@ -174,7 +175,7 @@ class DataFactory:
         self.lb_matrix, self.ub_matrix = np.zeros((self.size, self.size)), np.zeros((self.size, self.size))
         for (i, j), v in results.items():
             self.wmd_dist_matrix[j, i] = self.wmd_dist_matrix[i, j] = v['dist_wmd']
-            self.lb_matrix[j, i] = self.lb_matrix[i, j] = v['dist_rwmd']
+            self.lb_matrix[j, i] = self.lb_matrix[i, j] = v[f'dist_{self.lb}']
             self.ub_matrix[j, i] = self.ub_matrix[i, j] = v['dist_UB_G']
 
         self.mu = np.mean(self.wmd_dist_matrix[:train_size, :train_size])
