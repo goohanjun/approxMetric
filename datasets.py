@@ -77,6 +77,17 @@ class DataFactory:
         mse_test = (area_d + area_b) / (train_size * test_size + test_size * (test_size + 1) / 2)
         return mse_train, mse_test
 
+    @staticmethod
+    def mape_score(true_dist_matrix, approx_dist_matrix, train_size, test_size):
+        # relative error
+        mape = np.abs(true_dist_matrix - approx_dist_matrix) / (true_dist_matrix+1e-8)
+
+        tmp_sum = np.sum(mape[:train_size, :train_size])
+        mape_train = tmp_sum / (train_size * train_size)
+        mape_test = (np.sum(mape) - tmp_sum) / ((train_size+test_size) ** 2. - train_size**2.)
+
+        return mape_train, mape_test
+
     @ staticmethod
     def comp_score(dists_1, dists_2):
         # Compute triplet comparison score
@@ -95,6 +106,10 @@ class DataFactory:
         mse_train, mse_test = self.mse_score(self.wmd_dist_matrix, dist_matrix, train_size, test_size)
         perf_dict[f'{dist_name}/mse/train'] = mse_train
         perf_dict[f'{dist_name}/mse/test'] = mse_test
+
+        mape_train, mape_test = self.mape_score(self.wmd_dist_matrix, dist_matrix, train_size, test_size)
+        perf_dict[f'{dist_name}/mape/train'] = mape_train
+        perf_dict[f'{dist_name}/mape/test'] = mape_test
 
         comp_scores = []
         for q_idx in range(self.size):
