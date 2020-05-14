@@ -93,6 +93,8 @@ def main(args):
 
     if args.ratio:
         args.model_name = "ENS_" + args.model_name
+    else:
+        args.model_name = "SOL_" + args.model_name
 
     if torch.cuda.is_available():
         model = model.cuda()
