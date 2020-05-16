@@ -12,15 +12,19 @@ import numpy as np
 
 class DataFactory:
     def __init__(self, size=500, ratio=False, lb='rwmd'):
+        self.use_cuda = False
+
         self.size = size
         self.ratio = ratio
         self.lb = lb
         self.train, self.valid, self.test_1, self.test_2 = self.load()
 
         self.embedding = self.load_embedding()
-
         self.init_performance()
         self.default_perf_dict = self.measure_approx_performance()
+
+    def cuda(self):
+        self.use_cuda = True
 
     def measure_approx_performance(self):
         perf_dict = {}
@@ -267,14 +271,14 @@ class DataFactory:
         padded_sentences_1 = self.embedding(padded_sentences_1)  # [batch, max_len_1, hidden]
         padded_sentences_2 = self.embedding(padded_sentences_2)  # [batch, max_len_2, hidden]
 
-        if torch.cuda.is_available():
+        if self.use_cuda:
             lengths_1 = lengths_1.cuda()
             lengths_2 = lengths_2.cuda()
 
         padded_sentences_1 = pack_padded_sequence(padded_sentences_1, lengths_1.tolist(), batch_first=True, enforce_sorted=False)
         padded_sentences_2 = pack_padded_sequence(padded_sentences_2, lengths_2.tolist(), batch_first=True, enforce_sorted=False)
 
-        if torch.cuda.is_available():
+        if self.use_cuda:
             padded_sentences_1 = padded_sentences_1.cuda()
             padded_sentences_2 = padded_sentences_2.cuda()
             dists = dists.cuda()

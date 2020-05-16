@@ -1,4 +1,5 @@
 import torch
+import time
 import argparse
 from utils import Map, str2bool
 import random
@@ -74,6 +75,20 @@ def train(args, model, optimizer, data_factory):
         print(f"Epoch @ {epoch}", perf_dict)
 
 
+def test(model, data_factory):
+    print("Measuring inference time")
+    n_samples = 0
+    start = time.time()
+    for mode in ['test_1', 'test_2']:
+        for b in tqdm(data_factory.get_batch(batch_size=args.batch_size, mode=mode)):
+            keys, sentences_1, sentences_2, dists = b
+            approx_dists = model.forward(sentences_1, sentences_2)
+            n_samples += len(keys)
+    end = time.time()
+    print(f"{(end - start)/n_samples} per sentence_pair")
+    return
+
+
 def main(args):
     # Set seed
     torch.manual_seed(0);random.seed(0);np.random.seed(0)
@@ -96,14 +111,14 @@ def main(args):
     else:
         args.model_name = "SOL_" + args.model_name
 
-    if torch.cuda.is_available():
-        model = model.cuda()
-
     print(model)
-
-    optimizer = torch.optim.Adam(model.parameters(), args.lr, weight_decay=args.l2_reg)
-
-    train(args, model, optimizer, data_factory)
+    if args.test:
+        test(model, data_factory)
+    else:
+        if torch.cuda.is_available():
+            model = model.cuda(); data_factory.cuda()
+        optimizer = torch.optim.Adam(model.parameters(), args.lr, weight_decay=args.l2_reg)
+        train(args, model, optimizer, data_factory)
 
 
 if __name__ == '__main__':
