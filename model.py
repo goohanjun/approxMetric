@@ -11,6 +11,7 @@ class ApproxEMD(nn.Module):
     def __init__(self, args):
         super().__init__()
         self.name = "SymAtt_Double"
+
         self.ratio = args.ratio
         self.n_hidden = n_hidden = args.n_hidden
 
@@ -32,7 +33,7 @@ class ApproxEMD(nn.Module):
     def forward(self, sentences_1, sentences_2):
         seq_1, seq_len_1 = pad_packed_sequence(sentences_1, batch_first=True)
         seq_2, seq_len_2 = pad_packed_sequence(sentences_2, batch_first=True)
-        if torch.cuda.is_available():
+        if next(self.parameters()).is_cuda:
             div_seq_len_1 = seq_len_1.cuda(); div_seq_len_2 = seq_len_2.cuda()
 
         # [batch, length, n_dim]
@@ -244,14 +245,14 @@ class BatchScaledDotProductAttention(nn.Module):
         max_len = max(lengths)
         lengths = self.list_to_var(lengths)
         temp = torch.arange(max_len)
-        if torch.cuda.is_available():
+        if next(self.parameters()).is_cuda:
             temp = temp.cuda()
         mask = Variable((temp[None, :] < lengths[:, None]))
         return mask
 
     def list_to_var(self, x):
         x = Variable(torch.LongTensor(x))
-        if torch.cuda.is_available():
+        if next(self.parameters()).is_cuda:
             x = x.cuda()
         return x
 
